@@ -1,0 +1,14 @@
+uuid: "test-gateway-live-001"
+client_id: "test_client"
+site_id: "test_site_hq"
+api_url: "http://localhost:8080/heartbeat"
+
+auth:
+  token_current: "test-token-12345"
+
+intervals:
+  heartbeat_seconds: 5
+  compute_seconds: 10
+
+tls:
+  insecure_skip_verify: false

@@ -1,0 +1,14 @@
+uuid: "test-gateway-abc123"
+client_id: "test_client"
+site_id: "test_site"
+api_url: "https://api.example.com/heartbeat"
+
+auth:
+  token_current: "test-token-secret"
+
+intervals:
+  heartbeat_seconds: 60
+  compute_seconds: 120
+
+tls:
+  insecure_skip_verify: false

@@ -1,0 +1,51 @@
+# Gateway Agent Configuration Example
+# Copy this file and customize for your deployment
+
+# Required: Unique identifier for this gateway
+uuid: "gateway-12345-abcde"
+
+# Required: Client identifier
+client_id: "acme_corp"
+
+# Required: Site identifier
+site_id: "headquarters"
+
+# Required: Backend API endpoint (must be HTTPS)
+api_url: "https://api.example.com/v1/heartbeat"
+
+# Authentication configuration
+auth:
+  # Required: Current API token
+  token_current: "your-secret-token-here"
+
+  # Optional: Grace token for zero-downtime rotation
+  # Uncomment to enable dual-token rotation
+  # token_grace: "old-token-during-rotation"
+
+# Platform detection (optional)
+platform:
+  # Optional: Override auto-detected platform
+  # Values: raspberry_pi, ubuntu, windows, vm, linux
+  # If not specified, platform is auto-detected
+  # platform_override: "ubuntu"
+
+# Timing intervals (optional)
+intervals:
+  # How often to send heartbeats (seconds)
+  # Default: 60
+  heartbeat_seconds: 60
+
+  # How often to refresh compute metrics (seconds)
+  # Default: 120
+  compute_seconds: 120
+
+# TLS configuration (optional)
+tls:
+  # Optional: Path to custom CA bundle for TLS verification
+  # ca_bundle_path: "/etc/ssl/certs/custom-ca-bundle.pem"
+
+  # TLS certificate verification
+  # IMPORTANT: Must be false in production
+  # Only set to true for testing/development
+  # Default: false
+  insecure_skip_verify: false
