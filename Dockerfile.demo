@@ -1,0 +1,29 @@
+# Dockerfile para demostrar el agente en un contenedor Linux
+FROM ubuntu:22.04
+
+# Instalar utilidades básicas
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear usuario no-privilegiado
+RUN useradd -m -s /bin/bash gwagent
+
+# Copiar binario
+COPY dist/linux_amd64/gw-agent /usr/local/bin/gw-agent
+RUN chmod +x /usr/local/bin/gw-agent
+
+# Copiar configuración de ejemplo
+COPY config.example.yaml /etc/gw-agent/config.yaml
+RUN chown -R gwagent:gwagent /etc/gw-agent
+
+# Cambiar a usuario no-root
+USER gwagent
+WORKDIR /home/gwagent
+
+# Verificar binario
+RUN /usr/local/bin/gw-agent --print-version
+
+# Por defecto ejecutar en modo continuo
+CMD ["/usr/local/bin/gw-agent", "--config", "/etc/gw-agent/config.yaml"]

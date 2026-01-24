@@ -2,6 +2,20 @@
 
 A cross-platform daemon that monitors gateway status and sends periodic heartbeats to a backend API. Built in Go for maximum portability and minimal resource usage.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Build](#build)
+- [Configuration](#configuration)
+- [Running the Agent](#running-the-agent)
+- [Installation as Service](#installation-as-service)
+- [Payload Format](#payload-format)
+- [Retry & Token Rotation](#retry--token-rotation)
+- [Monitoring & Metrics](#monitoring--metrics)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+
 ## Overview
 
 The Gateway Monitoring Agent is a push-only daemon (no inbound ports) that:
@@ -11,22 +25,43 @@ The Gateway Monitoring Agent is a push-only daemon (no inbound ports) that:
 - Runs as a system service on Linux and Windows
 - Produces static binaries with no external runtime dependencies
 
-## Features
+### Features
 
-- **Cross-platform**: Supports Linux (amd64/arm64) and Windows (amd64)
+- **Cross-platform**: Linux (amd64/arm64) and Windows (amd64)
 - **Push-only**: No listening ports, all communication is outbound HTTPS
-- **Secure**: Token-based authentication with optional dual-token rotation
+- **Secure**: Token-based authentication with dual-token rotation
 - **Resilient**: Automatic retry with exponential backoff on transient failures
-- **Lightweight**: Single static binary, minimal resource usage
-- **Observable**: Structured logging with configurable levels
+- **Lightweight**: Single static binary (~6-7MB), minimal resource usage
+- **Observable**: Structured JSON logging with configurable levels
 
-## Supported Platforms
+### Supported Platforms
 
 | Platform | Architecture | Target | Notes |
 |----------|-------------|---------|-------|
 | Ubuntu | amd64 | `linux_amd64` | Tested on Ubuntu 20.04+ |
 | Raspberry Pi | arm64 | `linux_arm64` | Tested on Raspberry Pi 4 |
 | Windows 11 | amd64 | `windows_amd64` | Requires Administrator |
+
+## Quick Start
+
+```bash
+# Build for all platforms
+make build-all
+
+# Test with dry run (no network call)
+./dist/gw-agent --config config.yaml --dry-run
+
+# Send single heartbeat
+./dist/gw-agent --config config.yaml --once
+
+# Run continuously
+./dist/gw-agent --config config.yaml
+
+# Check version
+./dist/gw-agent --print-version
+```
+
+See [QUICKSTART.md](QUICKSTART.md) for installation guide and [DEMO-GUIDE.md](DEMO-GUIDE.md) for demonstrations.
 
 ## Build
 
@@ -35,37 +70,96 @@ The Gateway Monitoring Agent is a push-only daemon (no inbound ports) that:
 - Go 1.21 or later
 - Make (or run Go commands directly)
 
-### Build for Current Platform
+### Basic Build
 
 ```bash
+# Build for current platform
 make build
-```
 
-Binary will be in `./dist/gw-agent` (or `gw-agent.exe` on Windows)
-
-### Build for All Platforms
-
-```bash
+# Build for all platforms
 make build-all
-```
 
-Binaries will be in:
-- `./dist/linux_amd64/gw-agent`
-- `./dist/linux_arm64/gw-agent`
-- `./dist/windows_amd64/gw-agent.exe`
-
-### Other Make Targets
-
-```bash
-make test      # Run tests
-make lint      # Run linters (requires golangci-lint or uses go vet)
+# Other targets
+make test      # Run tests with race detector
+make lint      # Run linters
 make clean     # Remove build artifacts
 make deps      # Download dependencies
 ```
 
+Output binaries:
+- `./dist/linux_amd64/gw-agent` - Ubuntu/Linux x86_64
+- `./dist/linux_arm64/gw-agent` - Raspberry Pi ARM64
+- `./dist/windows_amd64/gw-agent.exe` - Windows x86_64
+
+### Advanced Build
+
+<details>
+<summary>Version Embedding, CI/CD, and Distribution</summary>
+
+#### Version Embedding
+
+```bash
+# From git tags
+VERSION=$(git describe --tags --always) make build-all
+
+# Manual version
+VERSION=1.0.0 COMMIT=$(git rev-parse --short HEAD) make build-all
+```
+
+Check version: `./gw-agent --print-version`
+
+#### Binary Details
+
+- **Static binaries**: CGO disabled, no external dependencies
+- **Size**: ~6-7 MB (stripped with -s -w)
+- **Cross-compilation**: Build from any platform for all targets
+
+#### CI/CD Integration
+
+```yaml
+name: Build
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      - run: make build-all
+      - uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: dist/
+```
+
+#### Distribution Methods
+
+1. **Direct binary** - Upload to S3/CDN
+2. **Package managers** - .deb, .rpm, .msi wrappers
+3. **Containers** - Use scratch or distroless base
+4. **Tar archives** - Bundle binary + scripts + config
+
+```bash
+tar czf gw-agent-linux-amd64.tar.gz \
+  -C dist/linux_amd64 gw-agent \
+  -C ../../scripts gw-agent.service install-linux.sh \
+  -C .. config.example.yaml README.md
+```
+
+#### Dependencies
+
+```
+github.com/shirou/gopsutil/v3  # System metrics
+gopkg.in/yaml.v3               # YAML parsing
+```
+
+</details>
+
 ## Configuration
 
-Configuration is in YAML format. By default, the agent looks for:
+Default config locations:
 - Linux: `/etc/gw-agent/config.yaml`
 - Windows: `C:\ProgramData\GWAgent\config.yaml`
 
@@ -81,11 +175,11 @@ api_url: "https://api.example.com/v1/heartbeat"
 # Authentication (required)
 auth:
   token_current: "your-current-api-token"
-  token_grace: "optional-old-token-for-rotation"  # Optional
+  token_grace: "optional-old-token-for-rotation"  # For zero-downtime rotation
 
 # Platform detection (optional)
 platform:
-  platform_override: "ubuntu"  # Optional: raspberry_pi, ubuntu, windows, vm, linux
+  platform_override: "ubuntu"  # raspberry_pi, ubuntu, windows, vm, linux
 
 # Timing intervals (optional, defaults shown)
 intervals:
@@ -94,33 +188,95 @@ intervals:
 
 # TLS configuration (optional)
 tls:
-  ca_bundle_path: "/path/to/ca-bundle.pem"  # Optional custom CA bundle
-  insecure_skip_verify: false               # Must be false by default
+  ca_bundle_path: "/path/to/ca-bundle.pem"  # Custom CA bundle
+  insecure_skip_verify: false               # Keep false in production
 ```
 
-### Required Fields
+**Required fields**: `uuid`, `client_id`, `site_id`, `api_url`, `auth.token_current`
 
-The following fields are **required** and the agent will fail to start if missing:
-- `uuid` - Unique identifier for this gateway
-- `client_id` - Client name
-- `site_id` - Site name
-- `api_url` - Full HTTPS URL to the backend API endpoint
-- `auth.token_current` - Current API authentication token
+**Platform auto-detection**: `raspberry_pi`, `ubuntu`, `windows`, `vm`, or `linux` (fallback)
 
-### Platform Override
+## Running the Agent
 
-If not specified, the agent auto-detects the platform:
-- `raspberry_pi` - Linux ARM64 with Raspberry Pi board detected
-- `ubuntu` - Linux with Ubuntu in `/etc/os-release`
-- `windows` - Windows OS
-- `vm` - Virtualization detected (VirtualBox, VMware, KVM, etc.)
-- `linux` - Generic Linux (fallback)
+### Command-Line Flags
+
+```bash
+gw-agent [flags]
+
+Flags:
+  --config string       Config file path (default: /etc/gw-agent/config.yaml)
+  --once                Send one heartbeat and exit
+  --log-level string    Log level: debug, info, warn, error (default: info)
+  --dry-run             Print payload without sending
+  --print-version       Print version and exit
+```
+
+### Examples
+
+```bash
+# Linux
+./gw-agent --config /path/to/config.yaml --dry-run
+./gw-agent --config /path/to/config.yaml --once
+./gw-agent --config /path/to/config.yaml
+
+# Windows
+.\gw-agent.exe --config C:\path\to\config.yaml --dry-run
+.\gw-agent.exe --config C:\path\to\config.yaml --once
+.\gw-agent.exe --config C:\path\to\config.yaml
+```
+
+## Installation as Service
+
+### Linux (systemd)
+
+```bash
+# Install (creates gwagent user, systemd service)
+sudo ./scripts/install-linux.sh
+
+# Configure
+sudo nano /etc/gw-agent/config.yaml
+
+# Start service
+sudo systemctl enable gw-agent
+sudo systemctl start gw-agent
+sudo systemctl status gw-agent
+
+# View logs
+sudo journalctl -u gw-agent -f
+```
+
+**Locations**:
+- Binary: `/opt/gw-agent/gw-agent`
+- Config: `/etc/gw-agent/config.yaml`
+- Logs: journald
+
+**Note**: Service runs as non-privileged `gwagent` user. Some metrics may require elevated permissions.
+
+### Windows
+
+```powershell
+# Install (PowerShell as Administrator)
+.\scripts\install-windows.ps1
+
+# Configure
+notepad C:\ProgramData\GWAgent\config.yaml
+
+# Start service
+.\scripts\start-windows.ps1
+Get-Service -Name GWAgent
+
+# Uninstall
+.\scripts\install-windows.ps1 -Uninstall
+```
+
+**Locations**:
+- Binary: `C:\Program Files\GWAgent\gw-agent.exe`
+- Config: `C:\ProgramData\GWAgent\config.yaml`
+- Logs: Windows Event Log
 
 ## Payload Format
 
-### Base Contract (Backward Compatible)
-
-The agent sends JSON payloads matching this minimum structure:
+### Minimum Payload
 
 ```json
 {
@@ -133,28 +289,22 @@ The agent sends JSON payloads matching this minimum structure:
   },
   "additional_notes": {
     "metadata": {
-      "platform": "raspberry_pi"
+      "platform": "ubuntu"
     }
   }
 }
 ```
 
-### Extended Payload (With Metrics)
-
-When compute metrics are available (collected every 120s by default):
+### Full Payload (with metrics)
 
 ```json
 {
   "payload_version": "1.0",
   "uuid": "gateway-unique-id",
-  "client_id": "client_name",
-  "site_id": "site_name",
   "stats": {
     "system_status": "online",
     "compute": {
-      "cpu": {
-        "usage_percent": 25.5
-      },
+      "cpu": {"usage_percent": 25.5},
       "memory": {
         "total_bytes": 8589934592,
         "used_bytes": 4294967296,
@@ -178,324 +328,131 @@ When compute metrics are available (collected every 120s by default):
 }
 ```
 
-### Important Notes on Payload
+**Important**:
+- Missing metrics are omitted entirely (not null/0/"unknown")
+- Backend should use its own timestamp for availability tracking
+- Metrics cached every `compute_seconds` (default: 120s)
+- Platform field always present
 
-- **Missing metrics are omitted** - If CPU/memory/disk metrics cannot be collected (permissions, errors), those fields are omitted entirely (not null, not 0, not "unknown")
-- **Backend uses backend time** - The `agent_timestamp_utc` field is for diagnostics only; the backend should use its own timestamp for availability tracking
-- **Compute metrics are cached** - Metrics are refreshed based on `compute_seconds` interval but included in every heartbeat when available
-- **Platform is always present** - The `metadata.platform` field is always included
+## Retry & Token Rotation
 
-## Running the Agent
+### Retry Policy
 
-### Command-Line Flags
+- **5xx/network errors**: Retry 3x with backoff (5s, 15s, 30s)
+- **4xx (except 401/403)**: No retry, wait for next cycle
+- **401/403**: Try `token_grace` if configured, otherwise no retry
+- **Timeout**: 10s per request
 
-```bash
-gw-agent [flags]
-
-Flags:
-  --config string       Path to configuration file (default "/etc/gw-agent/config.yaml")
-  --once                Send one heartbeat and exit
-  --log-level string    Log level: debug, info, warn, error (default "info")
-  --dry-run             Build payload and print to stdout without sending
-  --print-version       Print version information and exit
+**Example timeline** (500 errors):
+```
+0s:  Initial attempt → 500
+5s:  Retry 1 → 500
+20s: Retry 2 → 500 (5s + 15s)
+50s: Retry 3 → 200 ✓ (5s + 15s + 30s)
 ```
 
-### Manual Execution
+### Token Rotation (Zero-Downtime)
 
-#### Linux
+1. Add new token as `token_grace` in config
+2. Agent tries `token_current` first, falls back to `token_grace` on 401/403
+3. Verify new token works in backend
+4. Promote new token to `token_current`
+5. Remove old token
 
-```bash
-# Test with dry run
-./gw-agent --config /path/to/config.yaml --dry-run
+**Security**: Tokens never logged. Config file should be 0600 on Linux.
 
-# Send one heartbeat
-./gw-agent --config /path/to/config.yaml --once
+### Offline Detection
 
-# Run continuously
-./gw-agent --config /path/to/config.yaml
-```
+Backend determines availability:
+- **Recommended**: Gateway offline if no heartbeat for >180s (3 missed intervals)
+- Agent always sends `system_status: "online"` when heartbeat succeeds
+- `agent_timestamp_utc` is for diagnostics only
 
-#### Windows
-
-```powershell
-# Test with dry run
-.\gw-agent.exe --config C:\path\to\config.yaml --dry-run
-
-# Send one heartbeat
-.\gw-agent.exe --config C:\path\to\config.yaml --once
-
-# Run continuously
-.\gw-agent.exe --config C:\path\to\config.yaml
-```
-
-## Installation as Service
-
-### Linux (Ubuntu/Raspberry Pi)
-
-The installer creates a systemd service running as a dedicated `gwagent` user.
-
-```bash
-# Run the installation script (requires root)
-sudo ./scripts/install-linux.sh
-
-# Edit the configuration
-sudo nano /etc/gw-agent/config.yaml
-
-# Enable and start the service
-sudo systemctl enable gw-agent
-sudo systemctl start gw-agent
-
-# Check status
-sudo systemctl status gw-agent
-
-# View logs
-sudo journalctl -u gw-agent -f
-```
-
-**Installed locations:**
-- Binary: `/opt/gw-agent/gw-agent`
-- Config: `/etc/gw-agent/config.yaml`
-- Logs: journald (use `journalctl -u gw-agent`)
-
-**Note on permissions:** The service runs as the `gwagent` user with minimal privileges. Some system metrics may require elevated permissions. If all metrics fail to collect, you may need to adjust the service user or permissions.
-
-### Windows
-
-The installer creates a Windows service using `sc.exe`.
-
-```powershell
-# Run PowerShell as Administrator
-cd binary-gws
-
-# Install the service
-.\scripts\install-windows.ps1
-
-# Edit the configuration
-notepad C:\ProgramData\GWAgent\config.yaml
-
-# Start the service
-.\scripts\start-windows.ps1
-# Or: Start-Service -Name GWAgent
-
-# Check status
-Get-Service -Name GWAgent
-
-# Stop the service
-.\scripts\stop-windows.ps1
-# Or: Stop-Service -Name GWAgent
-
-# Uninstall
-.\scripts\install-windows.ps1 -Uninstall
-```
-
-**Installed locations:**
-- Binary: `C:\Program Files\GWAgent\gw-agent.exe`
-- Config: `C:\ProgramData\GWAgent\config.yaml`
-- Logs: Windows Event Log or `C:\ProgramData\GWAgent\logs\`
-
-## Retry and Backoff Policy
-
-The agent implements a deterministic retry policy for resilience:
-
-### Retry Behavior
-
-- **Network errors or HTTP 5xx** - Retry up to 3 times with backoff delays: 5s, 15s, 30s
-- **HTTP 4xx (except 401/403)** - No retry, log error and wait for next cycle
-- **HTTP 401/403** - If `token_grace` is configured, fallback to grace token once; otherwise no retry
-
-### Timeout Policy
-
-- **Request timeout**: 10 seconds per HTTP request
-- **Cycle behavior**: Retries happen within a single heartbeat cycle; the cycle never blocks indefinitely
-- After exhausting retries, the agent waits until the next heartbeat interval
-
-### Example Timeline
-
-For a 500 Internal Server Error:
-```
-0s:  Initial request fails (HTTP 500)
-5s:  First retry fails (HTTP 500)
-20s: Second retry fails (HTTP 500, cumulative: 5s + 15s delay)
-50s: Third retry succeeds (cumulative: 5s + 15s + 30s delay)
-```
-
-## Token Rotation
-
-The agent supports dual-token rotation for zero-downtime credential updates:
-
-1. Configure both `token_current` and `token_grace` in config
-2. Agent tries `token_current` first
-3. If it receives 401 or 403, agent tries `token_grace` once (single fallback per cycle)
-4. Once the new token is confirmed working, remove `token_grace` from config
-
-This allows you to:
-- Add new token as `token_grace`
-- Verify it works in backend
-- Promote new token to `token_current`
-- Remove old token
-
-**Security note:** Tokens are never logged. The configuration file should have restricted permissions (0600 on Linux).
-
-## Offline Detection
-
-The agent itself does not track "offline" status. The **backend** is responsible for determining availability:
-
-- **Recommended policy**: If no heartbeat received for **>180 seconds** (3 missed 60s intervals), consider gateway offline
-- The agent sends `system_status: "online"` in every successful heartbeat
-- The agent includes `agent_timestamp_utc` for diagnostics, but the backend should use its own receive timestamp
-
-## Metrics and Observability
+## Monitoring & Metrics
 
 ### Structured Logging
 
-All logs are JSON-formatted with:
-- `timestamp` - ISO 8601 UTC timestamp
+JSON logs include:
+- `timestamp` - ISO 8601 UTC
 - `level` - DEBUG, INFO, WARN, ERROR
 - `msg` - Human-readable message
-- `gateway_uuid` - Partially redacted UUID (first 4 and last 4 chars)
-- Additional contextual fields (e.g., `consecutive_failures`, `last_success_at`)
+- `gateway_uuid` - Partially redacted (first 4 + last 4 chars)
+- `consecutive_failures`, `last_success_at` - Contextual fields
 
-**Security:** Tokens and authorization headers are never logged.
+**Security**: Tokens and authorization headers never logged.
 
-### Key Metrics
-
-The agent logs:
-- `consecutive_failures` - Count of failed heartbeat attempts
-- `last_success_at` - Timestamp of last successful heartbeat
-- Platform detection results on startup
-- Retry attempts and backoff delays
-
-### Monitoring the Agent
-
-On Linux:
-```bash
-# View recent logs
-sudo journalctl -u gw-agent -n 100
-
-# Follow logs in real-time
-sudo journalctl -u gw-agent -f
-
-# Check for errors
-sudo journalctl -u gw-agent -p err
-```
-
-On Windows:
-```powershell
-# View Windows Event Log
-Get-EventLog -LogName Application -Source GWAgent -Newest 50
-
-# Or check log file if configured for file logging
-Get-Content C:\ProgramData\GWAgent\logs\gw-agent.log -Tail 50 -Wait
-```
-
-## Compute Metrics
-
-The agent collects the following system metrics when available:
+### Collected Metrics
 
 | Metric | Description | Unit |
 |--------|-------------|------|
-| `cpu.usage_percent` | System-wide CPU usage | Percentage (0-100) |
-| `memory.total_bytes` | Total physical memory | Bytes |
-| `memory.used_bytes` | Used physical memory | Bytes |
-| `memory.usage_percent` | Memory usage percentage | Percentage (0-100) |
-| `disk.total_bytes` | Total disk space (root/primary volume) | Bytes |
-| `disk.used_bytes` | Used disk space | Bytes |
-| `disk.usage_percent` | Disk usage percentage | Percentage (0-100) |
+| `cpu.usage_percent` | System-wide CPU | % (0-100) |
+| `memory.total_bytes` | Total RAM | Bytes |
+| `memory.used_bytes` | Used RAM | Bytes |
+| `memory.usage_percent` | RAM usage | % (0-100) |
+| `disk.total_bytes` | Total disk | Bytes |
+| `disk.used_bytes` | Used disk | Bytes |
+| `disk.usage_percent` | Disk usage | % (0-100) |
 
-**Behavior:**
-- Metrics are refreshed every `compute_seconds` interval (default: 120s)
-- Cached metrics are included in every heartbeat when available
-- If metric collection fails (permissions, errors), that metric group is omitted entirely
-- CPU measurement takes ~1 second to calculate average usage
+**Behavior**:
+- Refreshed every `compute_seconds` (default: 120s)
+- Cached and included in every heartbeat
+- Omitted if collection fails (permissions, errors)
+- CPU measurement takes ~1s
 
-## Testing
+### View Logs
 
-### Unit Tests
-
+**Linux**:
 ```bash
-make test
+sudo journalctl -u gw-agent -f        # Follow
+sudo journalctl -u gw-agent -n 100    # Last 100 lines
+sudo journalctl -u gw-agent -p err    # Errors only
 ```
 
-Tests cover:
-- Configuration validation
-- Payload building (ensures missing metrics are omitted)
-- HTTP retry logic with mock server
-- Token fallback behavior
-- Backoff timing (using injectable sleeper interface)
-
-### Integration Testing
-
-Use the `--dry-run` flag to verify payload format without sending:
-
-```bash
-./gw-agent --config ./test-config.yaml --dry-run
-```
-
-Use the `--once` flag to send a single heartbeat and exit:
-
-```bash
-./gw-agent --config ./config.yaml --once
+**Windows**:
+```powershell
+Get-EventLog -LogName Application -Source GWAgent -Newest 50
+Get-Content C:\ProgramData\GWAgent\logs\gw-agent.log -Tail 50 -Wait
 ```
 
 ## Troubleshooting
 
 ### Agent fails to start
 
-1. Check configuration file exists and is valid YAML
-2. Ensure all required fields are present (`uuid`, `client_id`, `site_id`, `api_url`, `auth.token_current`)
-3. Check logs for specific validation errors
+1. Verify config is valid YAML with all required fields
+2. Check logs for validation errors
+3. Test manually: `./gw-agent --config config.yaml --dry-run`
 
 ### No metrics in payload
 
-- Metrics require certain permissions; the service may need elevated privileges
-- Check logs for metric collection errors
-- Metrics are cached every 120s by default; wait for one refresh cycle
-- If permission errors occur, metrics are gracefully omitted
+- Metrics require permissions (service may need privileges)
+- Wait for one refresh cycle (default: 120s)
+- Check logs for collection errors
+- Metrics gracefully omitted on permission errors
 
 ### Heartbeats failing
 
 1. Check network connectivity to `api_url`
 2. Verify token is valid
-3. Check TLS certificate validation (use `insecure_skip_verify: true` only for testing)
-4. Review logs for specific HTTP error codes
-5. Check backend API is returning 2xx status codes
+3. Check TLS validation (`insecure_skip_verify: true` for testing only)
+4. Review logs for HTTP error codes
+5. Verify backend returns 2xx
 
-### Service won't start on Linux
+### Service won't start
 
+**Linux**:
 ```bash
-# Check service status
 sudo systemctl status gw-agent
-
-# Check for errors
 sudo journalctl -u gw-agent -n 50
-
-# Verify binary permissions
 ls -l /opt/gw-agent/gw-agent
-
-# Test running manually as service user
 sudo -u gwagent /opt/gw-agent/gw-agent --config /etc/gw-agent/config.yaml --once
 ```
 
-### Service won't start on Windows
-
+**Windows**:
 ```powershell
-# Check service status
 Get-Service -Name GWAgent
-
-# Check Event Viewer
 Get-EventLog -LogName Application -Source GWAgent -Newest 10
-
-# Test running manually
 & "C:\Program Files\GWAgent\gw-agent.exe" --config "C:\ProgramData\GWAgent\config.yaml" --once
 ```
-
-## Security Considerations
-
-1. **Configuration files contain secrets** - Ensure config files have restrictive permissions (0600 on Linux, restricted ACLs on Windows)
-2. **Token rotation** - Use dual-token rotation to update credentials without downtime
-3. **TLS verification** - Keep `insecure_skip_verify: false` in production
-4. **Service user** - Linux service runs as dedicated `gwagent` user with minimal privileges
-5. **No self-update** - The agent does NOT self-update; updates must be performed manually to prevent supply-chain attacks
 
 ## Development
 
@@ -504,43 +461,62 @@ Get-EventLog -LogName Application -Source GWAgent -Newest 10
 ```
 binary-gws/
 ├── cmd/agent/              # Main entrypoint
-│   └── main.go
 ├── internal/
-│   ├── config/            # Configuration loading and validation
+│   ├── config/            # Configuration validation
 │   ├── platform/          # Platform detection
 │   ├── collector/         # System metrics collection
-│   ├── scheduler/         # Heartbeat scheduling and payload building
-│   ├── transport/         # HTTP client with retry logic
+│   ├── scheduler/         # Heartbeat scheduling
+│   ├── transport/         # HTTP client with retry
 │   └── logging/           # Structured logging
-├── scripts/               # Installation and service scripts
-│   ├── gw-agent.service   # systemd unit file
-│   ├── install-linux.sh   # Linux installer
-│   ├── install-windows.ps1 # Windows installer
-│   ├── start-windows.ps1  # Windows service start script
-│   └── stop-windows.ps1   # Windows service stop script
-├── dist/                  # Build output (created by make)
+├── scripts/               # Installation scripts
+├── dist/                  # Build output
 ├── Makefile              # Build system
-├── go.mod                # Go module definition
-└── README.md             # This file
+└── go.mod                # Go modules
 ```
+
+### Testing
+
+```bash
+# Unit tests with race detector
+make test
+
+# Dry-run (verify payload without sending)
+./gw-agent --config test-config.yaml --dry-run
+
+# Single heartbeat test
+./gw-agent --config test-config.yaml --once
+```
+
+Tests cover:
+- Configuration validation
+- Payload building with metric omission
+- HTTP retry logic with mock server
+- Token fallback behavior
+- Backoff timing
 
 ### Adding Features
 
-When extending the agent:
+When extending:
 1. **Maintain backward compatibility** - Never break existing payload fields
 2. **Omit missing data** - Don't send null/0/"unknown" for unavailable metrics
-3. **Add tests** - Include unit tests for new functionality
-4. **Update README** - Document new configuration options and behavior
+3. **Add tests** - Include unit tests
+4. **Update docs** - Document new config options
 
-## Version Information
+### Security Considerations
 
-To check the agent version:
+1. **Config secrets** - Use 0600 permissions (Linux) or restricted ACLs (Windows)
+2. **Token rotation** - Use dual-token for zero-downtime updates
+3. **TLS verification** - Keep `insecure_skip_verify: false` in production
+4. **Service user** - Linux runs as non-privileged `gwagent` user
+5. **No self-update** - Manual updates only (prevents supply-chain attacks)
+
+### Version Information
 
 ```bash
 ./gw-agent --print-version
 ```
 
-Version information is embedded at build time using ldflags and included in the payload under `additional_notes.metadata.build`.
+Version embedded at build time via ldflags and included in payload under `additional_notes.metadata.build`.
 
 ## License
 

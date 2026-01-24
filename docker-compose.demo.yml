@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # Servidor de prueba que recibe heartbeats
+  test-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.testserver
+    ports:
+      - "8080:8080"
+    networks:
+      - demo-network
+
+  # Agente gateway (Ubuntu)
+  gw-agent-ubuntu:
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+    depends_on:
+      - test-server
+    environment:
+      - LOG_LEVEL=info
+    volumes:
+      - ./test-docker-config.yaml:/etc/gw-agent/config.yaml:ro
+    networks:
+      - demo-network
+    command: ["/usr/local/bin/gw-agent", "--config", "/etc/gw-agent/config.yaml", "--log-level", "info"]
+
+networks:
+  demo-network:
+    driver: bridge

@@ -1,0 +1,15 @@
+# Configuración para prueba en Docker
+uuid: "docker-test-001"
+client_id: "docker_client"
+site_id: "docker_demo"
+api_url: "http://test-server:8080/heartbeat"
+
+auth:
+  token_current: "docker-test-token"
+
+intervals:
+  heartbeat_seconds: 10
+  compute_seconds: 30
+
+tls:
+  insecure_skip_verify: false
