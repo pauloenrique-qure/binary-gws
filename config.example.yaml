@@ -20,7 +20,7 @@ api_url_fallbacks:
 # Authentication configuration
 auth:
   # Required: Current API token
-  token_current: "your-secret-token-here"
+  token_current: "adbd05ddec03fd5206d013bd2af139486a92dfd9ec9a9179ae9c73e6709af74b"
 
   # Optional: Grace token for zero-downtime rotation
   # Uncomment to enable dual-token rotation
