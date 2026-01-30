@@ -26,6 +26,7 @@ type Config struct {
 }
 
 type Payload struct {
+	BatchIndex      int             `json:"batch_index"`
 	PayloadVersion  string          `json:"payload_version"`
 	UUID            string          `json:"uuid"`
 	ClientID        string          `json:"client_id"`
@@ -54,6 +55,7 @@ type Scheduler struct {
 	config              Config
 	consecutiveFailures int
 	lastSuccessAt       *time.Time
+	batchCounter        int
 }
 
 func New(cfg Config) *Scheduler {
@@ -63,7 +65,9 @@ func New(cfg Config) *Scheduler {
 }
 
 func (s *Scheduler) buildPayload() *Payload {
+	s.batchCounter++
 	payload := &Payload{
+		BatchIndex:     s.batchCounter,
 		PayloadVersion: "1.0",
 		UUID:           s.config.UUID,
 		ClientID:       s.config.ClientID,

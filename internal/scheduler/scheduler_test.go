@@ -64,6 +64,16 @@ func TestBuildPayload(t *testing.T) {
 		t.Errorf("expected AgentVersion=1.0.0, got %s", payload.Additional.Metadata.AgentVersion)
 	}
 
+	if payload.BatchIndex != 1 {
+		t.Errorf("expected BatchIndex=1 on first call, got %d", payload.BatchIndex)
+	}
+
+	// Test that batch_index increments
+	payload2 := sched.buildPayload()
+	if payload2.BatchIndex != 2 {
+		t.Errorf("expected BatchIndex=2 on second call, got %d", payload2.BatchIndex)
+	}
+
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("failed to marshal payload: %v", err)
