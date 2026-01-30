@@ -114,7 +114,7 @@ dist/windows_amd64/gw-agent.exe: PE32+ executable (console) x86-64, for MS Windo
       }
     }
   },
-  "additional_notes": {
+  "additional": {
     "metadata": {
       "platform": "linux",
       "agent_version": "dev",
@@ -139,7 +139,7 @@ dist/windows_amd64/gw-agent.exe: PE32+ executable (console) x86-64, for MS Windo
 
 ### Terminal 1: Server
 ```bash
-go run test-server.go
+go run ./cmd/test-server
 ```
 
 Expected output:
@@ -188,7 +188,7 @@ Waiting for heartbeats...
 
 ### Terminal 1: Server simulating failures
 ```bash
-go run test-retry-server.go
+go run ./cmd/test-retry-server
 ```
 
 Expected output:

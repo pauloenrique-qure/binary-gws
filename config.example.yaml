@@ -10,8 +10,12 @@ client_id: "acme_corp"
 # Required: Site identifier
 site_id: "headquarters"
 
-# Required: Backend API endpoint (must be HTTPS)
-api_url: "https://api.example.com/v1/heartbeat"
+# Required: Backend API endpoint
+api_url: "http://pulse.qure.ai:8001/api/v1/service-stats-data/"
+
+# Optional: Fallback API endpoints (tried in order on retryable failures)
+api_url_fallbacks:
+  - "http://172.17.4.26:8001/api/v1/service-stats-data/"
 
 # Authentication configuration
 auth:

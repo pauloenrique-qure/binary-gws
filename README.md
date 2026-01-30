@@ -287,7 +287,7 @@ Get-Service -Name GWAgent
   "stats": {
     "system_status": "online"
   },
-  "additional_notes": {
+  "additional": {
     "metadata": {
       "platform": "ubuntu"
     }
@@ -317,7 +317,7 @@ Get-Service -Name GWAgent
       }
     }
   },
-  "additional_notes": {
+  "additional": {
     "metadata": {
       "platform": "ubuntu",
       "agent_version": "1.0.0",
@@ -516,7 +516,7 @@ When extending:
 ./gw-agent --print-version
 ```
 
-Version embedded at build time via ldflags and included in payload under `additional_notes.metadata.build`.
+Version embedded at build time via ldflags and included in payload under `additional.metadata.build`.
 
 ## License
 

@@ -56,12 +56,12 @@ func TestBuildPayload(t *testing.T) {
 		t.Errorf("expected SystemStatus=online, got %s", payload.Stats.SystemStatus)
 	}
 
-	if payload.AdditionalNotes.Metadata.Platform != platform.PlatformUbuntu {
-		t.Errorf("expected Platform=ubuntu, got %s", payload.AdditionalNotes.Metadata.Platform)
+	if payload.Additional.Metadata.Platform != platform.PlatformUbuntu {
+		t.Errorf("expected Platform=ubuntu, got %s", payload.Additional.Metadata.Platform)
 	}
 
-	if payload.AdditionalNotes.Metadata.AgentVersion != "1.0.0" {
-		t.Errorf("expected AgentVersion=1.0.0, got %s", payload.AdditionalNotes.Metadata.AgentVersion)
+	if payload.Additional.Metadata.AgentVersion != "1.0.0" {
+		t.Errorf("expected AgentVersion=1.0.0, got %s", payload.Additional.Metadata.AgentVersion)
 	}
 
 	jsonData, err := json.Marshal(payload)

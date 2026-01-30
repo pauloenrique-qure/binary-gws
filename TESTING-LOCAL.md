@@ -69,7 +69,7 @@ ls -lh dist/*/gw-agent*
 
 **Terminal 1 - Server**:
 ```bash
-go run test-server.go
+go run ./cmd/test-server
 ```
 
 **Terminal 2 - Agent**:
@@ -85,7 +85,7 @@ go run test-server.go
 
 **Terminal 1 - Server with simulated failures**:
 ```bash
-go run test-retry-server.go
+go run ./cmd/test-retry-server
 ```
 
 **Terminal 2 - Agent**:

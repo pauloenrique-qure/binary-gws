@@ -58,8 +58,9 @@ func main() {
 
 	collector := collector.New(cfg.Intervals.ComputeSeconds)
 
+	apiURLs := append([]string{cfg.APIURL}, cfg.APIURLFallbacks...)
 	transportClient, err := transport.New(transport.Config{
-		APIURL:             cfg.APIURL,
+		APIURLs:            apiURLs,
 		TokenCurrent:       cfg.Auth.TokenCurrent,
 		TokenGrace:         cfg.Auth.TokenGrace,
 		CABundlePath:       cfg.TLS.CABundlePath,

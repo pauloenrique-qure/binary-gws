@@ -73,6 +73,20 @@ func TestConfigValidation(t *testing.T) {
 			expectErr: true,
 		},
 		{
+			name: "invalid fallback url",
+			config: Config{
+				UUID:            "test-uuid",
+				ClientID:        "test-client",
+				SiteID:          "test-site",
+				APIURL:          "https://api.example.com",
+				APIURLFallbacks: []string{"not-a-url"},
+				Auth: Auth{
+					TokenCurrent: "test-token",
+				},
+			},
+			expectErr: true,
+		},
+		{
 			name: "negative heartbeat interval",
 			config: Config{
 				UUID:     "test-uuid",
@@ -151,6 +165,8 @@ uuid: test-gateway-123
 client_id: test-client
 site_id: test-site
 api_url: https://api.example.com/heartbeat
+api_url_fallbacks:
+  - https://api-backup.example.com/heartbeat
 auth:
   token_current: secret-token-123
   token_grace: old-token-456

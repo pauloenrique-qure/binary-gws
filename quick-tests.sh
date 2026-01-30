@@ -70,7 +70,7 @@ test_server() {
     echo ""
     echo "INSTRUCCIONES:"
     echo "1. Abre una segunda terminal"
-    echo "2. Ejecuta: go run test-server.go"
+    echo "2. Ejecuta: go run ./cmd/test-server"
     echo "3. Vuelve aquí y presiona ENTER"
     echo ""
     read -p "¿Servidor listo? (ENTER para continuar) "
@@ -88,7 +88,7 @@ test_retry() {
     echo ""
 
     # Levantar servidor en background
-    go run test-retry-server.go > /tmp/retry-server.log 2>&1 &
+    go run ./cmd/test-retry-server > /tmp/retry-server.log 2>&1 &
     SERVER_PID=$!
     sleep 2
 

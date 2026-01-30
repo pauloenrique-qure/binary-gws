@@ -31,7 +31,7 @@ type Payload struct {
 	ClientID        string          `json:"client_id"`
 	SiteID          string          `json:"site_id"`
 	Stats           Stats           `json:"stats"`
-	AdditionalNotes AdditionalNotes `json:"additional_notes"`
+	Additional      Additional      `json:"additional"`
 	AgentTimestamp  string          `json:"agent_timestamp_utc,omitempty"`
 }
 
@@ -40,7 +40,7 @@ type Stats struct {
 	Compute      *collector.ComputeMetrics `json:"compute,omitempty"`
 }
 
-type AdditionalNotes struct {
+type Additional struct {
 	Metadata Metadata `json:"metadata"`
 }
 
@@ -72,7 +72,7 @@ func (s *Scheduler) buildPayload() *Payload {
 			SystemStatus: s.config.Collector.GetSystemStatus(),
 			Compute:      s.config.Collector.GetComputeMetrics(false),
 		},
-		AdditionalNotes: AdditionalNotes{
+		Additional: Additional{
 			Metadata: Metadata{
 				Platform: s.config.Platform.Platform,
 			},
@@ -81,7 +81,7 @@ func (s *Scheduler) buildPayload() *Payload {
 	}
 
 	if s.config.Version != "" {
-		payload.AdditionalNotes.Metadata.AgentVersion = s.config.Version
+		payload.Additional.Metadata.AgentVersion = s.config.Version
 	}
 	if s.config.Commit != "" || s.config.BuildDate != "" {
 		buildInfo := ""
@@ -94,7 +94,7 @@ func (s *Scheduler) buildPayload() *Payload {
 			}
 			buildInfo += s.config.BuildDate
 		}
-		payload.AdditionalNotes.Metadata.Build = buildInfo
+		payload.Additional.Metadata.Build = buildInfo
 	}
 
 	return payload

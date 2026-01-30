@@ -1,0 +1,13 @@
+uuid: "fallback-test-001"
+client_id: "test_client"
+site_id: "test_site"
+api_url: "http://localhost:9999/heartbeat"
+api_url_fallbacks:
+  - "http://localhost:8080/heartbeat"
+
+auth:
+  token_current: "test-token"
+
+intervals:
+  heartbeat_seconds: 60
+  compute_seconds: 120

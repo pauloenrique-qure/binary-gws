@@ -101,7 +101,7 @@ print_header "DEMO 4: Heartbeat End-to-End con Servidor Local"
 print_info "Iniciando servidor de prueba en localhost:8080..."
 
 # Iniciar servidor en background
-go run test-server.go > /tmp/test-server.log 2>&1 &
+go run ./cmd/test-server > /tmp/test-server.log 2>&1 &
 SERVER_PID=$!
 sleep 2
 

@@ -4,10 +4,10 @@ FROM golang:1.25-alpine
 WORKDIR /app
 
 # Copiar solo el servidor de prueba
-COPY test-server.go .
+COPY cmd/test-server ./cmd/test-server
 
 # Exponer puerto
 EXPOSE 8080
 
 # Ejecutar servidor
-CMD ["go", "run", "test-server.go"]
+CMD ["go", "run", "./cmd/test-server"]

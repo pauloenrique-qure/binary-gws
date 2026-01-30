@@ -198,7 +198,7 @@ Get-EventLog -LogName Application -Source GWAgent -Newest 50
       }
     }
   },
-  "additional_notes": {
+  "additional": {
     "metadata": {
       "platform": "ubuntu",
       "agent_version": "1.0.0",

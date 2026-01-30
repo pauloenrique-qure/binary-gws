@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 )
 
 type Config struct {
-	APIURL             string
+	APIURLs            []string
 	TokenCurrent       string
 	TokenGrace         string
 	CABundlePath       string
@@ -34,7 +35,7 @@ type RetryConfig struct {
 
 var DefaultRetryConfig = RetryConfig{
 	MaxRetries: 3,
-	Delays:     []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second},
+	Delays:     []time.Duration{5 * time.Second, 10 * time.Second, 15 * time.Second},
 }
 
 type Sleeper interface {
@@ -50,6 +51,9 @@ func (RealSleeper) Sleep(d time.Duration) {
 func New(cfg Config) (*Client, error) {
 	if cfg.RequestTimeout == 0 {
 		cfg.RequestTimeout = 10 * time.Second
+	}
+	if len(cfg.APIURLs) == 0 {
+		return nil, fmt.Errorf("api_urls is required")
 	}
 
 	tlsConfig := &tls.Config{
@@ -102,6 +106,54 @@ func (c *Client) SendHeartbeat(ctx context.Context, payload interface{}, retryCo
 	}
 
 	var lastErr error
+	for _, apiURL := range c.config.APIURLs {
+		if apiURL == "" {
+			continue
+		}
+		err := c.sendToURL(ctx, apiURL, jsonData, tokens, retryConfig, sleeper)
+		if err == nil {
+			return nil
+		}
+		if !shouldTryFallback(err) {
+			return err
+		}
+		lastErr = err
+	}
+
+	return lastErr
+}
+
+func extractStatusCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var statusCode int
+	fmt.Sscanf(err.Error(), "authentication failed: HTTP %d", &statusCode)
+	if statusCode == 0 {
+		fmt.Sscanf(err.Error(), "client error: HTTP %d", &statusCode)
+	}
+	if statusCode == 0 {
+		fmt.Sscanf(err.Error(), "server error: HTTP %d", &statusCode)
+	}
+	return statusCode
+}
+
+func shouldTryFallback(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	statusCode := extractStatusCode(err)
+	if statusCode >= 400 && statusCode < 500 {
+		return false
+	}
+	return true
+}
+
+func (c *Client) sendToURL(ctx context.Context, apiURL string, jsonData []byte, tokens []string, retryConfig RetryConfig, sleeper Sleeper) error {
+	var lastErr error
 	for tokenIndex, token := range tokens {
 		for attempt := 0; attempt <= retryConfig.MaxRetries; attempt++ {
 			if attempt > 0 {
@@ -113,7 +165,7 @@ func (c *Client) SendHeartbeat(ctx context.Context, payload interface{}, retryCo
 				sleeper.Sleep(delay)
 			}
 
-			req, err := http.NewRequestWithContext(ctx, "POST", c.config.APIURL, bytes.NewBuffer(jsonData))
+			req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonData))
 			if err != nil {
 				lastErr = fmt.Errorf("failed to create request: %w", err)
 				continue
@@ -141,7 +193,7 @@ func (c *Client) SendHeartbeat(ctx context.Context, payload interface{}, retryCo
 
 			if resp.StatusCode == 401 || resp.StatusCode == 403 {
 				if tokenIndex == 0 && c.config.TokenGrace != "" {
-				lastErr = fmt.Errorf("authentication failed: HTTP %d", resp.StatusCode)
+					lastErr = fmt.Errorf("authentication failed: HTTP %d", resp.StatusCode)
 					break
 				}
 				return fmt.Errorf("authentication failed: HTTP %d", resp.StatusCode)
@@ -164,19 +216,4 @@ func (c *Client) SendHeartbeat(ctx context.Context, payload interface{}, retryCo
 	}
 
 	return lastErr
-}
-
-func extractStatusCode(err error) int {
-	if err == nil {
-		return 0
-	}
-	var statusCode int
-	fmt.Sscanf(err.Error(), "authentication failed: HTTP %d", &statusCode)
-	if statusCode == 0 {
-		fmt.Sscanf(err.Error(), "client error: HTTP %d", &statusCode)
-	}
-	if statusCode == 0 {
-		fmt.Sscanf(err.Error(), "server error: HTTP %d", &statusCode)
-	}
-	return statusCode
 }

@@ -276,7 +276,7 @@ go test -v -race -cover ./internal/...
       }
     }
   },
-  "additional_notes": {
+  "additional": {
     "metadata": {"platform": "linux"}
   },
   "agent_timestamp_utc": "2026-01-23T21:18:03Z"
@@ -354,7 +354,7 @@ go test -v -race -cover ./internal/...
       }
     }
   },
-  "additional_notes": {
+  "additional": {
     "metadata": {
       "platform": "linux",
       "agent_version": "544eb7f",
@@ -374,9 +374,9 @@ go test -v -race -cover ./internal/...
 - ✅ `stats.compute.memory`: real system metrics
 - ✅ `stats.compute.disk`: real system metrics
 - ⚠️ `stats.compute.cpu`: omitted (expected on macOS with limited permissions)
-- ✅ `additional_notes.metadata.platform`: correctly detected
-- ✅ `additional_notes.metadata.agent_version`: version present
-- ✅ `additional_notes.metadata.build`: build info present
+- ✅ `additional.metadata.platform`: correctly detected
+- ✅ `additional.metadata.agent_version`: version present
+- ✅ `additional.metadata.build`: build info present
 - ✅ `agent_timestamp_utc`: RFC3339 timestamp
 
 **Conclusion**: ✅ Payload conforms to v1.0 specification with real system metrics.
@@ -386,7 +386,7 @@ go test -v -race -cover ./internal/...
 ## 7. Local Server Heartbeat
 
 ### Test Setup
-**Test server**: `go run test-server.go` on localhost:8080
+**Test server**: `go run ./cmd/test-server` on localhost:8080
 
 ### Server Output
 ```
@@ -394,7 +394,7 @@ go test -v -race -cover ./internal/...
 [Request #1] Authorization: Bearer test-token
 [Request #1] Payload received:
 {
-  "additional_notes": {
+  "additional": {
     "metadata": {
       "agent_version": "dev",
       "build": "none unknown",
@@ -579,7 +579,7 @@ Build Date: 2026-01-24T14:52:39Z
 - ✅ `stats.compute.cpu`: present (if permissions allow)
 - ✅ `stats.compute.memory`: present
 - ✅ `stats.compute.disk`: present
-- ✅ `additional_notes.metadata.platform`: correct for device
+- ✅ `additional.metadata.platform`: correct for device
 
 ### Step 4: One-shot Heartbeat
 

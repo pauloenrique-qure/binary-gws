@@ -11,14 +11,15 @@ import (
 )
 
 type Config struct {
-	UUID      string    `yaml:"uuid"`
-	ClientID  string    `yaml:"client_id"`
-	SiteID    string    `yaml:"site_id"`
-	APIURL    string    `yaml:"api_url"`
-	Auth      Auth      `yaml:"auth"`
-	Platform  Platform  `yaml:"platform"`
-	Intervals Intervals `yaml:"intervals"`
-	TLS       TLS       `yaml:"tls"`
+	UUID            string    `yaml:"uuid"`
+	ClientID        string    `yaml:"client_id"`
+	SiteID          string    `yaml:"site_id"`
+	APIURL          string    `yaml:"api_url"`
+	APIURLFallbacks []string  `yaml:"api_url_fallbacks"`
+	Auth            Auth      `yaml:"auth"`
+	Platform        Platform  `yaml:"platform"`
+	Intervals       Intervals `yaml:"intervals"`
+	TLS             TLS       `yaml:"tls"`
 }
 
 type Auth struct {
@@ -74,11 +75,17 @@ func (c *Config) Validate() error {
 	if c.APIURL == "" {
 		errs = append(errs, "api_url is required")
 	} else {
-		parsedURL, err := url.Parse(c.APIURL)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("api_url is invalid: %v", err))
-		} else if !strings.HasPrefix(strings.ToLower(parsedURL.Scheme), "http") {
-			errs = append(errs, "api_url must be an HTTP(S) URL")
+		if err := validateHTTPURL(c.APIURL, "api_url"); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	for i, fallback := range c.APIURLFallbacks {
+		if strings.TrimSpace(fallback) == "" {
+			continue
+		}
+		label := fmt.Sprintf("api_url_fallbacks[%d]", i)
+		if err := validateHTTPURL(fallback, label); err != nil {
+			errs = append(errs, err.Error())
 		}
 	}
 	if c.Auth.TokenCurrent == "" {
@@ -113,4 +120,15 @@ func (c *Config) setDefaults() {
 
 func joinErrors(errs []string) string {
 	return strings.Join(errs, "; ")
+}
+
+func validateHTTPURL(rawURL string, fieldName string) error {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("%s is invalid: %v", fieldName, err)
+	}
+	if !strings.HasPrefix(strings.ToLower(parsedURL.Scheme), "http") {
+		return fmt.Errorf("%s must be an HTTP(S) URL", fieldName)
+	}
+	return nil
 }
