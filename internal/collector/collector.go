@@ -342,11 +342,16 @@ func (c *Collector) collectProcess() *ProcessMetrics {
 		}
 
 		// Count by status
+		// gopsutil returns full state names: "running", "sleep", "idle", etc.
 		if len(status) > 0 {
-			switch status[0] {
-			case "R": // Running
+			state := strings.ToLower(status[0])
+			switch state {
+			case "running", "run", "r":
 				runningCount++
-			case "S": // Sleeping
+			case "sleep", "sleeping", "s":
+				sleepingCount++
+			case "idle", "i":
+				// Idle kernel threads - count as sleeping for metrics
 				sleepingCount++
 			}
 		}
