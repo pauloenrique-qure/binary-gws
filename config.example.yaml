@@ -36,12 +36,31 @@ platform:
 # Timing intervals (optional)
 intervals:
   # How often to send heartbeats (seconds)
-  # Default: 60
-  heartbeat_seconds: 60
+  # Default: 15
+  heartbeat_seconds: 15
 
   # How often to refresh compute metrics (seconds)
   # Default: 120
   compute_seconds: 120
+
+# Metrics Collection
+# The agent automatically collects and sends the following metrics:
+#
+# System Metrics (included in every heartbeat):
+#   - CPU usage percentage
+#   - Memory total, used, and usage percentage
+#   - Disk space total, used, and usage percentage
+#   - Temperature readings from CPU and system sensors (when available)
+#
+# Task Failure Alerts (when tasks are executed):
+#   - Total tasks executed
+#   - Success and failure counts
+#   - Timestamp of last failure
+#   - Recent failure history (last 10 failures with task ID, error, timestamp)
+#
+# To record task executions in your application, use the collector methods:
+#   collector.RecordTaskSuccess("task-id")
+#   collector.RecordTaskFailure("task-id", "error message")
 
 # TLS configuration (optional)
 tls:

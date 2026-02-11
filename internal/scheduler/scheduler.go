@@ -37,8 +37,9 @@ type Payload struct {
 }
 
 type Stats struct {
-	SystemStatus collector.SystemStatus  `json:"system_status"`
+	SystemStatus collector.SystemStatus    `json:"system_status"`
 	Compute      *collector.ComputeMetrics `json:"compute,omitempty"`
+	Tasks        *collector.TaskMetrics    `json:"tasks,omitempty"`
 }
 
 type Additional struct {
@@ -75,6 +76,7 @@ func (s *Scheduler) buildPayload() *Payload {
 		Stats: Stats{
 			SystemStatus: s.config.Collector.GetSystemStatus(),
 			Compute:      s.config.Collector.GetComputeMetrics(false),
+			Tasks:        s.config.Collector.GetTaskMetrics(),
 		},
 		Additional: Additional{
 			Metadata: Metadata{

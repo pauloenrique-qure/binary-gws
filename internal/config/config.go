@@ -111,7 +111,7 @@ func (c *Config) Validate() error {
 
 func (c *Config) setDefaults() {
 	if c.Intervals.HeartbeatSeconds == 0 {
-		c.Intervals.HeartbeatSeconds = 60
+		c.Intervals.HeartbeatSeconds = 15
 	}
 	if c.Intervals.ComputeSeconds == 0 {
 		c.Intervals.ComputeSeconds = 120
