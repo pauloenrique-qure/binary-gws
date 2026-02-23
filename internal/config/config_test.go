@@ -147,8 +147,8 @@ func TestConfigDefaults(t *testing.T) {
 
 	cfg.setDefaults()
 
-	if cfg.Intervals.HeartbeatSeconds != 60 {
-		t.Errorf("expected HeartbeatSeconds=60, got %d", cfg.Intervals.HeartbeatSeconds)
+	if cfg.Intervals.HeartbeatSeconds != 15 {
+		t.Errorf("expected HeartbeatSeconds=15, got %d", cfg.Intervals.HeartbeatSeconds)
 	}
 
 	if cfg.Intervals.ComputeSeconds != 120 {
@@ -197,4 +197,67 @@ tls:
 	if cfg.Intervals.HeartbeatSeconds != 30 {
 		t.Errorf("expected HeartbeatSeconds=30, got %d", cfg.Intervals.HeartbeatSeconds)
 	}
+}
+
+func TestMonitoredProcessesConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("parses monitored_processes list", func(t *testing.T) {
+		configPath := filepath.Join(tmpDir, "config_procs.yaml")
+		configContent := `
+uuid: test-uuid
+client_id: test-client
+site_id: test-site
+api_url: https://api.example.com
+auth:
+  token_current: secret-token
+monitored_processes:
+  - nginx
+  - python3
+  - redis-server
+`
+		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+			t.Fatalf("failed to write test config: %v", err)
+		}
+
+		cfg, err := Load(configPath)
+		if err != nil {
+			t.Fatalf("failed to load config: %v", err)
+		}
+
+		if len(cfg.MonitoredProcesses) != 3 {
+			t.Errorf("expected 3 monitored processes, got %d", len(cfg.MonitoredProcesses))
+		}
+
+		expected := []string{"nginx", "python3", "redis-server"}
+		for i, name := range expected {
+			if cfg.MonitoredProcesses[i] != name {
+				t.Errorf("expected monitored_processes[%d]=%s, got %s", i, name, cfg.MonitoredProcesses[i])
+			}
+		}
+	})
+
+	t.Run("empty monitored_processes is valid", func(t *testing.T) {
+		configPath := filepath.Join(tmpDir, "config_no_procs.yaml")
+		configContent := `
+uuid: test-uuid
+client_id: test-client
+site_id: test-site
+api_url: https://api.example.com
+auth:
+  token_current: secret-token
+`
+		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+			t.Fatalf("failed to write test config: %v", err)
+		}
+
+		cfg, err := Load(configPath)
+		if err != nil {
+			t.Fatalf("config without monitored_processes should be valid: %v", err)
+		}
+
+		if len(cfg.MonitoredProcesses) != 0 {
+			t.Errorf("expected empty monitored processes, got %d", len(cfg.MonitoredProcesses))
+		}
+	})
 }

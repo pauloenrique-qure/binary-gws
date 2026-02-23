@@ -87,8 +87,15 @@ auth:
   # token_grace: "optional-for-rotation"
 
 intervals:
-  heartbeat_seconds: 60
+  heartbeat_seconds: 15
   compute_seconds: 120
+
+# Optional: monitor specific processes individually in each heartbeat.
+# Each listed process will report: name, PID, status, CPU%, memory%.
+# Partial matches supported ("python" matches "python3").
+# monitored_processes:
+#   - nginx
+#   - python3
 
 tls:
   insecure_skip_verify: false
@@ -178,6 +185,7 @@ Get-EventLog -LogName Application -Source GWAgent -Newest 50
 
 ```json
 {
+  "batch_index": 1,
   "payload_version": "1.0",
   "uuid": "gateway-123",
   "client_id": "client",
@@ -195,12 +203,35 @@ Get-EventLog -LogName Application -Source GWAgent -Newest 50
         "total_bytes": 107374182400,
         "used_bytes": 53687091200,
         "usage_percent": 50.0
+      },
+      "process": {
+        "total_count": 312,
+        "running_count": 3,
+        "sleeping_count": 309,
+        "monitored_processes": [
+          {
+            "name": "nginx",
+            "pid": 1023,
+            "status": "sleep",
+            "cpu_percent": 0.1,
+            "memory_percent": 0.05,
+            "memory_mb": 8
+          },
+          {
+            "name": "python3",
+            "pid": 4521,
+            "status": "sleep",
+            "cpu_percent": 2.3,
+            "memory_percent": 0.8,
+            "memory_mb": 68
+          }
+        ]
       }
     }
   },
   "additional": {
     "metadata": {
-      "platform": "ubuntu",
+      "platform": "raspberry_pi",
       "agent_version": "1.0.0",
       "build": "abc123 2024-01-01T12:00:00Z"
     }

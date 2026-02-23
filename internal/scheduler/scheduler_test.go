@@ -3,6 +3,8 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,6 +12,21 @@ import (
 	"github.com/binary-gws/agent/internal/logging"
 	"github.com/binary-gws/agent/internal/platform"
 )
+
+// newTestScheduler creates a scheduler with standard test defaults and a warmed-up collector.
+// The collector's compute interval is set to 1s; callers must sleep >=2s before calling buildPayload.
+func newTestScheduler(t *testing.T, col *collector.Collector) *Scheduler {
+	t.Helper()
+	return New(Config{
+		UUID:             "test-uuid",
+		ClientID:         "client",
+		SiteID:           "site",
+		Platform:         &platform.Info{Platform: platform.PlatformUbuntu},
+		HeartbeatSeconds: 60,
+		Collector:        col,
+		Logger:           logging.New(logging.LevelInfo, nil, "test-uuid"),
+	})
+}
 
 func TestBuildPayload(t *testing.T) {
 	platformInfo := &platform.Info{
@@ -150,5 +167,60 @@ func TestDryRun(t *testing.T) {
 	err := sched.SendOnce(ctx, true)
 	if err != nil {
 		t.Errorf("dry run should not fail: %v", err)
+	}
+}
+
+func TestPayloadProcessMetricsPresent(t *testing.T) {
+	col := collector.New(1)
+	sched := newTestScheduler(t, col)
+
+	time.Sleep(2 * time.Second)
+	payload := sched.buildPayload()
+
+	if payload.Stats.Compute == nil {
+		t.Fatal("expected compute metrics in payload")
+	}
+	if payload.Stats.Compute.Process == nil {
+		t.Fatal("expected process metrics in payload")
+	}
+	if payload.Stats.Compute.Process.TotalCount <= 0 {
+		t.Errorf("expected TotalCount > 0, got %d", payload.Stats.Compute.Process.TotalCount)
+	}
+}
+
+func TestPayloadMonitoredProcessesInPayload(t *testing.T) {
+	execPath, err := os.Executable()
+	if err != nil {
+		t.Skip("could not determine executable name, skipping")
+	}
+	execName := filepath.Base(execPath)
+
+	col := collector.New(1)
+	col.SetMonitoredProcesses([]string{execName})
+	sched := newTestScheduler(t, col)
+
+	time.Sleep(2 * time.Second)
+	payload := sched.buildPayload()
+
+	if payload.Stats.Compute == nil || payload.Stats.Compute.Process == nil {
+		t.Fatal("expected process metrics in payload")
+	}
+	if len(payload.Stats.Compute.Process.MonitoredProcess) == 0 {
+		t.Errorf("expected monitored process %q in payload, got none", execName)
+	}
+}
+
+func TestPayloadNoMonitoredProcessesWhenListEmpty(t *testing.T) {
+	col := collector.New(1)
+	sched := newTestScheduler(t, col)
+
+	time.Sleep(2 * time.Second)
+	payload := sched.buildPayload()
+
+	if payload.Stats.Compute == nil || payload.Stats.Compute.Process == nil {
+		t.Fatal("expected process metrics in payload")
+	}
+	if len(payload.Stats.Compute.Process.MonitoredProcess) != 0 {
+		t.Errorf("expected empty MonitoredProcess when no list set, got %d", len(payload.Stats.Compute.Process.MonitoredProcess))
 	}
 }

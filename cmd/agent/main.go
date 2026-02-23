@@ -57,6 +57,7 @@ func main() {
 	})
 
 	collector := collector.New(cfg.Intervals.ComputeSeconds)
+	collector.SetMonitoredProcesses(cfg.MonitoredProcesses)
 
 	apiURLs := append([]string{cfg.APIURL}, cfg.APIURLFallbacks...)
 	transportClient, err := transport.New(transport.Config{

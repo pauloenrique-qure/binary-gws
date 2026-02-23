@@ -62,6 +62,16 @@ intervals:
 #   collector.RecordTaskSuccess("task-id")
 #   collector.RecordTaskFailure("task-id", "error message")
 
+# Process monitoring (optional)
+# List of process names to monitor individually in each heartbeat.
+# Partial matches are supported (e.g. "python" matches "python3").
+# If not specified, only aggregate process counts are reported.
+# monitored_processes:
+#   - nginx
+#   - python3
+#   - redis-server
+#   - node
+
 # TLS configuration (optional)
 tls:
   # Optional: Path to custom CA bundle for TLS verification

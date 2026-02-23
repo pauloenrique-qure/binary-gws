@@ -38,8 +38,15 @@ auth:
   token_current: "YOUR_API_TOKEN"
 
 intervals:
-  heartbeat_seconds: 60
+  heartbeat_seconds: 15
   compute_seconds: 120
+
+# Optional: monitor specific processes individually in each heartbeat.
+# Each listed process will report: name, PID, status, CPU%, memory%.
+# Partial matches supported ("python" matches "python3").
+# monitored_processes:
+#   - nginx
+#   - python3
 
 tls:
   insecure_skip_verify: false

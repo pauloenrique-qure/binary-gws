@@ -75,8 +75,15 @@ auth:
 #   platform_override: "ubuntu"  # Optional: raspberry_pi, ubuntu, windows, vm, linux
 
 intervals:
-  heartbeat_seconds: 60
+  heartbeat_seconds: 15
   compute_seconds: 120
+
+# Optional: monitor specific processes individually in each heartbeat.
+# Each listed process will report: name, PID, status, CPU%, memory%.
+# Partial matches supported ("python" matches "python3").
+# monitored_processes:
+#   - nginx
+#   - python3
 
 tls:
   # ca_bundle_path: "/path/to/ca-bundle.pem"  # Optional

@@ -11,15 +11,16 @@ import (
 )
 
 type Config struct {
-	UUID            string    `yaml:"uuid"`
-	ClientID        string    `yaml:"client_id"`
-	SiteID          string    `yaml:"site_id"`
-	APIURL          string    `yaml:"api_url"`
-	APIURLFallbacks []string  `yaml:"api_url_fallbacks"`
-	Auth            Auth      `yaml:"auth"`
-	Platform        Platform  `yaml:"platform"`
-	Intervals       Intervals `yaml:"intervals"`
-	TLS             TLS       `yaml:"tls"`
+	UUID                string    `yaml:"uuid"`
+	ClientID            string    `yaml:"client_id"`
+	SiteID              string    `yaml:"site_id"`
+	APIURL              string    `yaml:"api_url"`
+	APIURLFallbacks     []string  `yaml:"api_url_fallbacks"`
+	Auth                Auth      `yaml:"auth"`
+	Platform            Platform  `yaml:"platform"`
+	Intervals           Intervals `yaml:"intervals"`
+	TLS                 TLS       `yaml:"tls"`
+	MonitoredProcesses  []string  `yaml:"monitored_processes"`
 }
 
 type Auth struct {
