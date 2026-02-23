@@ -9,7 +9,7 @@ import (
 const (
 	PlatformRaspberryPi = "raspberry_pi"
 	PlatformUbuntu      = "ubuntu"
-	PlatformWindows     = "windows"
+	PlatformWindows     = "windows_server"
 	PlatformVM          = "vm"
 	PlatformLinux       = "linux"
 )
