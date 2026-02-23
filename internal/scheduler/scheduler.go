@@ -40,6 +40,10 @@ type Stats struct {
 	SystemStatus collector.SystemStatus    `json:"system_status"`
 	Compute      *collector.ComputeMetrics `json:"compute,omitempty"`
 	Tasks        *collector.TaskMetrics    `json:"tasks,omitempty"`
+	// DCMIOMetrics fields (images_processed_current, images_synced_current,
+	// images_sync_pending_current, tasks_pending_current) are promoted to the
+	// stats level in the JSON payload. Nil when DCMIO is not configured.
+	*collector.DCMIOMetrics
 }
 
 type Additional struct {
@@ -77,6 +81,7 @@ func (s *Scheduler) buildPayload() *Payload {
 			SystemStatus: s.config.Collector.GetSystemStatus(),
 			Compute:      s.config.Collector.GetComputeMetrics(false),
 			Tasks:        s.config.Collector.GetTaskMetrics(),
+			DCMIOMetrics: s.config.Collector.GetDCMIOMetrics(),
 		},
 		Additional: Additional{
 			Metadata: Metadata{

@@ -72,6 +72,32 @@ intervals:
 #   - redis-server
 #   - node
 
+# DCMIO business metrics (optional)
+# When configured, the agent queries DCMIO's PostgreSQL and adds these fields
+# to the stats payload: images_processed_current, images_synced_current,
+# images_sync_pending_current, tasks_pending_current.
+#
+# Choose ONE of the two connection modes below:
+#
+# --- Mode A: Docker exec (recommended when DCMIO postgres has no exposed port) ---
+# Shells out to `docker exec <container> psql ...`. Requires docker CLI on PATH.
+#
+# dcmio:
+#   container_name: "postgres"        # docker ps name of the DCMIO postgres container
+#   postgres_user: "qure"
+#   postgres_pass: "qure@123"
+#   postgres_db: "dcmio"
+#   interval_seconds: 60              # How often to query the database. Default: 60
+#   window_hours: 12                  # Aggregation window in hours. Default: 12
+#
+# --- Mode B: Direct TCP (when postgres port is exposed to the host) ---
+# Connects directly via the postgres driver.
+#
+# dcmio:
+#   postgres_url: "postgres://qure:qure%40123@localhost:5432/dcmio?sslmode=disable"
+#   interval_seconds: 60
+#   window_hours: 12
+
 # TLS configuration (optional)
 tls:
   # Optional: Path to custom CA bundle for TLS verification

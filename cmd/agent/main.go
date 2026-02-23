@@ -56,8 +56,36 @@ func main() {
 		"config":    *configPath,
 	})
 
-	collector := collector.New(cfg.Intervals.ComputeSeconds)
-	collector.SetMonitoredProcesses(cfg.MonitoredProcesses)
+	col := collector.New(cfg.Intervals.ComputeSeconds)
+	col.SetMonitoredProcesses(cfg.MonitoredProcesses)
+
+	if cfg.DCMIO.ContainerName != "" {
+		dcmioCol := collector.NewDCMIODockerCollector(
+			cfg.DCMIO.ContainerName,
+			cfg.DCMIO.PostgresUser,
+			cfg.DCMIO.PostgresPass,
+			cfg.DCMIO.PostgresDB,
+			cfg.DCMIO.IntervalSeconds,
+			cfg.DCMIO.WindowHours,
+		)
+		col.SetDCMIOCollector(dcmioCol)
+		logger.Info("DCMIO metrics collector enabled (docker exec mode)", map[string]interface{}{
+			"container":        cfg.DCMIO.ContainerName,
+			"interval_seconds": cfg.DCMIO.IntervalSeconds,
+			"window_hours":     cfg.DCMIO.WindowHours,
+		})
+	} else if cfg.DCMIO.PostgresURL != "" {
+		dcmioCol := collector.NewDCMIOCollector(
+			cfg.DCMIO.PostgresURL,
+			cfg.DCMIO.IntervalSeconds,
+			cfg.DCMIO.WindowHours,
+		)
+		col.SetDCMIOCollector(dcmioCol)
+		logger.Info("DCMIO metrics collector enabled (direct TCP mode)", map[string]interface{}{
+			"interval_seconds": cfg.DCMIO.IntervalSeconds,
+			"window_hours":     cfg.DCMIO.WindowHours,
+		})
+	}
 
 	apiURLs := append([]string{cfg.APIURL}, cfg.APIURLFallbacks...)
 	transportClient, err := transport.New(transport.Config{
@@ -80,7 +108,7 @@ func main() {
 		SiteID:           cfg.SiteID,
 		Platform:         platformInfo,
 		HeartbeatSeconds: cfg.Intervals.HeartbeatSeconds,
-		Collector:        collector,
+		Collector:        col,
 		Transport:        transportClient,
 		Logger:           logger,
 		Version:          Version,

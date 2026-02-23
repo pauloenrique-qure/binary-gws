@@ -102,6 +102,9 @@ type Collector struct {
 
 	// Process monitoring
 	monitoredProcessNames []string
+
+	// DCMIO business metrics
+	dcmio *DCMIOCollector
 }
 
 func New(computeIntervalSeconds int) *Collector {
@@ -311,6 +314,26 @@ func (c *Collector) GetTaskMetrics() *TaskMetrics {
 	}
 
 	return metrics
+}
+
+// SetDCMIOCollector attaches a DCMIO postgres collector.
+// If dc is nil, DCMIO metrics are omitted from the payload.
+func (c *Collector) SetDCMIOCollector(dc *DCMIOCollector) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.dcmio = dc
+}
+
+// GetDCMIOMetrics returns the latest DCMIO business metrics, or nil if not configured.
+func (c *Collector) GetDCMIOMetrics() *DCMIOMetrics {
+	c.mu.RLock()
+	dc := c.dcmio
+	c.mu.RUnlock()
+
+	if dc == nil {
+		return nil
+	}
+	return dc.GetMetrics()
 }
 
 // SetMonitoredProcesses sets the list of process names to monitor

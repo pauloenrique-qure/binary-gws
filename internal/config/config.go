@@ -11,16 +11,31 @@ import (
 )
 
 type Config struct {
-	UUID                string    `yaml:"uuid"`
-	ClientID            string    `yaml:"client_id"`
-	SiteID              string    `yaml:"site_id"`
-	APIURL              string    `yaml:"api_url"`
-	APIURLFallbacks     []string  `yaml:"api_url_fallbacks"`
-	Auth                Auth      `yaml:"auth"`
-	Platform            Platform  `yaml:"platform"`
-	Intervals           Intervals `yaml:"intervals"`
-	TLS                 TLS       `yaml:"tls"`
-	MonitoredProcesses  []string  `yaml:"monitored_processes"`
+	UUID                string      `yaml:"uuid"`
+	ClientID            string      `yaml:"client_id"`
+	SiteID              string      `yaml:"site_id"`
+	APIURL              string      `yaml:"api_url"`
+	APIURLFallbacks     []string    `yaml:"api_url_fallbacks"`
+	Auth                Auth        `yaml:"auth"`
+	Platform            Platform    `yaml:"platform"`
+	Intervals           Intervals   `yaml:"intervals"`
+	TLS                 TLS         `yaml:"tls"`
+	MonitoredProcesses  []string    `yaml:"monitored_processes"`
+	DCMIO               DCMIOConfig `yaml:"dcmio"`
+}
+
+type DCMIOConfig struct {
+	// Direct TCP connection (postgres port reachable from host)
+	PostgresURL string `yaml:"postgres_url"`
+
+	// Docker exec mode (postgres container has no exposed port)
+	ContainerName string `yaml:"container_name"`
+	PostgresUser  string `yaml:"postgres_user"`
+	PostgresPass  string `yaml:"postgres_pass"`
+	PostgresDB    string `yaml:"postgres_db"`
+
+	IntervalSeconds int `yaml:"interval_seconds"`
+	WindowHours     int `yaml:"window_hours"`
 }
 
 type Auth struct {
@@ -116,6 +131,12 @@ func (c *Config) setDefaults() {
 	}
 	if c.Intervals.ComputeSeconds == 0 {
 		c.Intervals.ComputeSeconds = 120
+	}
+	if c.DCMIO.IntervalSeconds == 0 {
+		c.DCMIO.IntervalSeconds = 60
+	}
+	if c.DCMIO.WindowHours == 0 {
+		c.DCMIO.WindowHours = 12
 	}
 }
 

@@ -3,6 +3,7 @@ module github.com/binary-gws/agent
 go 1.25.6
 
 require (
+	github.com/lib/pq v1.10.9
 	github.com/shirou/gopsutil/v3 v3.24.5
 	gopkg.in/yaml.v3 v3.0.1
 )
