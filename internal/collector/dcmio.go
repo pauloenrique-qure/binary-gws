@@ -148,7 +148,7 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 			(
 				SELECT COUNT(DISTINCT graph_id)
 				FROM job_manager_task
-				WHERE type LIKE '%compute%'
+				WHERE type LIKE '%process%'
 				  AND status = 2
 				  AND updated_at >= NOW() - ($1 * INTERVAL '1 hour')
 			) AS scans_computed,
@@ -200,7 +200,7 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 // Output format: four comma-separated integers on a single line.
 func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 	sql := fmt.Sprintf(`SELECT `+
-		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE type LIKE '%%compute%%' AND status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS scans_computed,`+
+		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE type LIKE '%%process%%' AND status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS scans_computed,`+
 		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE type LIKE '%%publish%%' AND status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS scans_delivered,`+
 		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE status = 0 AND num_dependencies_pending = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS scans_pending,`+
 		`(SELECT COUNT(*) FROM job_manager_task WHERE status = 0 AND num_dependencies_pending = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS tasks_pending`,
