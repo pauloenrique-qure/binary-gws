@@ -20,6 +20,8 @@ type DCMIOMetrics struct {
 	ImagesSyncedCurrent      int64 `json:"images_synced_current"`
 	ImagesSyncPendingCurrent int64 `json:"images_sync_pending_current"`
 	TasksPendingCurrent      int64 `json:"tasks_pending_current"`
+	FailedUploadsCurrent     int64 `json:"failed_uploads_current"`
+	TotalScansCurrent        int64 `json:"total_scans_current"`
 }
 
 // DCMIOCollector queries DCMIO's postgres and caches results.
@@ -176,15 +178,33 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 				WHERE status = 0
 				  AND num_dependencies_pending = 0
 				  AND created_at >= NOW() - ($1 * INTERVAL '1 hour')
-			) AS tasks_pending
+			) AS tasks_pending,
+
+			(
+				SELECT COUNT(*)
+				FROM job_manager_task
+				WHERE status = -1
+				  AND type LIKE '%upload%'
+				  AND created_at >= NOW() - ($1 * INTERVAL '1 hour')
+			) AS failed_uploads,
+
+			(
+				SELECT COUNT(*)
+				FROM (
+					SELECT graph_id
+					FROM job_manager_task
+					GROUP BY graph_id
+					HAVING MIN(created_at) >= NOW() - ($1 * INTERVAL '1 hour')
+				) t
+			) AS total_scans
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var scansComputed, scansDelivered, scansPending, tasksPending int64
+	var scansComputed, scansDelivered, scansPending, tasksPending, failedUploads, totalScans int64
 	row := d.db.QueryRowContext(ctx, query, d.windowHours)
-	if err := row.Scan(&scansComputed, &scansDelivered, &scansPending, &tasksPending); err != nil {
+	if err := row.Scan(&scansComputed, &scansDelivered, &scansPending, &tasksPending, &failedUploads, &totalScans); err != nil {
 		return nil, fmt.Errorf("scan dcmio metrics: %w", err)
 	}
 
@@ -193,6 +213,8 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 		ImagesSyncedCurrent:      scansDelivered,
 		ImagesSyncPendingCurrent: scansPending,
 		TasksPendingCurrent:      tasksPending,
+		FailedUploadsCurrent:     failedUploads,
+		TotalScansCurrent:        totalScans,
 	}, nil
 }
 
@@ -204,8 +226,10 @@ func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE type LIKE '%%process%%' AND type NOT LIKE '%%processing_server_status%%' AND status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS scans_computed,`+
 		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE type LIKE '%%publish%%' AND status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS scans_delivered,`+
 		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE status = 0 AND num_dependencies_pending = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS scans_pending,`+
-		`(SELECT COUNT(*) FROM job_manager_task WHERE status = 0 AND num_dependencies_pending = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS tasks_pending`,
-		d.windowHours, d.windowHours, d.windowHours, d.windowHours,
+		`(SELECT COUNT(*) FROM job_manager_task WHERE status = 0 AND num_dependencies_pending = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS tasks_pending,`+
+		`(SELECT COUNT(*) FROM job_manager_task WHERE status = -1 AND type LIKE '%%upload%%' AND created_at >= NOW() - INTERVAL '%d hours') AS failed_uploads,`+
+		`(SELECT COUNT(*) FROM (SELECT graph_id FROM job_manager_task GROUP BY graph_id HAVING MIN(created_at) >= NOW() - INTERVAL '%d hours') t) AS total_scans`,
+		d.windowHours, d.windowHours, d.windowHours, d.windowHours, d.windowHours, d.windowHours,
 	)
 
 	args := []string{"exec"}
@@ -229,7 +253,7 @@ func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 
 	line := strings.TrimSpace(string(out))
 	parts := strings.Split(line, ",")
-	if len(parts) != 4 {
+	if len(parts) != 6 {
 		return nil, fmt.Errorf("unexpected psql output: %q", line)
 	}
 
@@ -249,11 +273,21 @@ func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse tasks_pending: %w", err)
 	}
+	failedUploads, err := strconv.ParseInt(strings.TrimSpace(parts[4]), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse failed_uploads: %w", err)
+	}
+	totalScans, err := strconv.ParseInt(strings.TrimSpace(parts[5]), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse total_scans: %w", err)
+	}
 
 	return &DCMIOMetrics{
 		ImagesProcessedCurrent:   scansComputed,
 		ImagesSyncedCurrent:      scansDelivered,
 		ImagesSyncPendingCurrent: scansPending,
 		TasksPendingCurrent:      tasksPending,
+		FailedUploadsCurrent:     failedUploads,
+		TotalScansCurrent:        totalScans,
 	}, nil
 }
