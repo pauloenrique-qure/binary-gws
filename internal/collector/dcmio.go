@@ -17,10 +17,10 @@ import (
 // Fields are embedded in Stats and appear flat in the JSON payload.
 // Field names match what the Pulse dashboard expects:
 //
-//	tasks_pending_current      → "Tasks Pending"
-//	images_synced_current      → "Scans Delivered last 12 hrs"
+//	tasks_pending_current       → "Tasks Pending"
+//	images_synced_current       → "Scans Delivered last 12 hrs"
 //	images_sync_pending_current → "Failed Uploads"
-//	total_scans_current        → extra (not displayed, sent for reference)
+//	total_scans_current         → "Total Scans" (also denominator for Success Rate)
 type DCMIOMetrics struct {
 	TasksPendingCurrent      int64 `json:"tasks_pending_current"`
 	ImagesSyncedCurrent      int64 `json:"images_synced_current"`
