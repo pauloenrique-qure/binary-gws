@@ -171,10 +171,7 @@ func (c *Collector) GetComputeMetrics(force bool) *ComputeMetrics {
 }
 
 func (c *Collector) collectCPU() *CPUMetrics {
-	// First call initializes the baseline; discard the result.
-	cpu.Percent(0, false)
-	time.Sleep(1 * time.Second)
-	percentages, err := cpu.Percent(0, false)
+	percentages, err := cpu.Percent(1*time.Second, false)
 	if err != nil || len(percentages) == 0 {
 		return nil
 	}
