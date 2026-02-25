@@ -40,8 +40,8 @@ type Stats struct {
 	SystemStatus collector.SystemStatus    `json:"system_status"`
 	Compute      *collector.ComputeMetrics `json:"compute,omitempty"`
 	Tasks        *collector.TaskMetrics    `json:"tasks,omitempty"`
-	// DCMIOMetrics fields (images_processed_current, images_synced_current,
-	// images_sync_pending_current, tasks_pending_current) are promoted to the
+	// DCMIOMetrics fields (tasks_pending_current, images_synced_current,
+	// images_sync_pending_current, total_scans_current) are promoted to the
 	// stats level in the JSON payload. Nil when DCMIO is not configured.
 	*collector.DCMIOMetrics
 }

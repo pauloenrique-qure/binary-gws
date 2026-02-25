@@ -15,12 +15,16 @@ import (
 
 // DCMIOMetrics holds business metrics fetched from DCMIO's PostgreSQL.
 // Fields are embedded in Stats and appear flat in the JSON payload.
+// Field names match what the Pulse dashboard expects:
+//
+//	tasks_pending_current      → "Tasks Pending"
+//	images_synced_current      → "Scans Delivered last 12 hrs"
+//	images_sync_pending_current → "Failed Uploads"
+//	total_scans_current        → extra (not displayed, sent for reference)
 type DCMIOMetrics struct {
-	ImagesProcessedCurrent   int64 `json:"images_processed_current"`
+	TasksPendingCurrent      int64 `json:"tasks_pending_current"`
 	ImagesSyncedCurrent      int64 `json:"images_synced_current"`
 	ImagesSyncPendingCurrent int64 `json:"images_sync_pending_current"`
-	TasksPendingCurrent      int64 `json:"tasks_pending_current"`
-	FailedUploadsCurrent     int64 `json:"failed_uploads_current"`
 	TotalScansCurrent        int64 `json:"total_scans_current"`
 }
 
@@ -131,60 +135,39 @@ func (d *DCMIOCollector) GetMetrics() *DCMIOMetrics {
 }
 
 // fetchMetricsDirect runs all queries via a direct postgres connection.
+// Queries mirror the original Python monitoring script:
 //
-// Queries explained:
+//	pending_tasks_count — all pending tasks (status=0) created within the window.
 //
-//	scans_computed — graphs where a compute task completed successfully within
-//	the configured window. Represents studies that went through AI inference.
+//	completed_scans — distinct graph IDs where any task completed (status=2)
+//	within the window. Represents studies processed by the system.
 //
-//	scans_delivered — graphs where a publish task completed successfully within
-//	the configured window. Represents studies published back to the hospital PACS.
+//	failed_uploads — failed upload tasks (status=-1,
+//	type='workflow_manager.tasks.upload.upload') within the window.
 //
-//	scans_pending — graphs with at least one ready-to-run pending task (status=0,
-//	num_dependencies_pending=0) created within the window.
-//
-//	tasks_pending — individual ready-to-run pending tasks within the window.
+//	total_scans — unique graph IDs whose first task was created within the window.
 func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 	const query = `
 		SELECT
 			(
-				SELECT COUNT(DISTINCT graph_id)
-				FROM job_manager_task
-				WHERE type LIKE '%process%'
-				  AND type NOT LIKE '%processing_server_status%'
-				  AND status = 2
-				  AND updated_at >= NOW() - ($1 * INTERVAL '1 hour')
-			) AS scans_computed,
-
-			(
-				SELECT COUNT(DISTINCT graph_id)
-				FROM job_manager_task
-				WHERE type LIKE '%publish%'
-				  AND status = 2
-				  AND updated_at >= NOW() - ($1 * INTERVAL '1 hour')
-			) AS scans_delivered,
-
-			(
-				SELECT COUNT(DISTINCT graph_id)
-				FROM job_manager_task
-				WHERE status = 0
-				  AND num_dependencies_pending = 0
-				  AND created_at >= NOW() - ($1 * INTERVAL '1 hour')
-			) AS scans_pending,
-
-			(
 				SELECT COUNT(*)
 				FROM job_manager_task
 				WHERE status = 0
-				  AND num_dependencies_pending = 0
 				  AND created_at >= NOW() - ($1 * INTERVAL '1 hour')
-			) AS tasks_pending,
+			) AS pending_tasks_count,
+
+			(
+				SELECT COUNT(DISTINCT graph_id)
+				FROM job_manager_task
+				WHERE status = 2
+				  AND updated_at >= NOW() - ($1 * INTERVAL '1 hour')
+			) AS completed_scans,
 
 			(
 				SELECT COUNT(*)
 				FROM job_manager_task
 				WHERE status = -1
-				  AND type LIKE '%upload%'
+				  AND type = 'workflow_manager.tasks.upload.upload'
 				  AND created_at >= NOW() - ($1 * INTERVAL '1 hour')
 			) AS failed_uploads,
 
@@ -202,18 +185,16 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var scansComputed, scansDelivered, scansPending, tasksPending, failedUploads, totalScans int64
+	var pendingTasksCount, completedScans, failedUploads, totalScans int64
 	row := d.db.QueryRowContext(ctx, query, d.windowHours)
-	if err := row.Scan(&scansComputed, &scansDelivered, &scansPending, &tasksPending, &failedUploads, &totalScans); err != nil {
+	if err := row.Scan(&pendingTasksCount, &completedScans, &failedUploads, &totalScans); err != nil {
 		return nil, fmt.Errorf("scan dcmio metrics: %w", err)
 	}
 
 	return &DCMIOMetrics{
-		ImagesProcessedCurrent:   scansComputed,
-		ImagesSyncedCurrent:      scansDelivered,
-		ImagesSyncPendingCurrent: scansPending,
-		TasksPendingCurrent:      tasksPending,
-		FailedUploadsCurrent:     failedUploads,
+		TasksPendingCurrent:      pendingTasksCount,
+		ImagesSyncedCurrent:      completedScans,
+		ImagesSyncPendingCurrent: failedUploads,
 		TotalScansCurrent:        totalScans,
 	}, nil
 }
@@ -223,13 +204,11 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 // Output format: four comma-separated integers on a single line.
 func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 	sql := fmt.Sprintf(`SELECT `+
-		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE type LIKE '%%process%%' AND type NOT LIKE '%%processing_server_status%%' AND status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS scans_computed,`+
-		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE type LIKE '%%publish%%' AND status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS scans_delivered,`+
-		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE status = 0 AND num_dependencies_pending = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS scans_pending,`+
-		`(SELECT COUNT(*) FROM job_manager_task WHERE status = 0 AND num_dependencies_pending = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS tasks_pending,`+
-		`(SELECT COUNT(*) FROM job_manager_task WHERE status = -1 AND type LIKE '%%upload%%' AND created_at >= NOW() - INTERVAL '%d hours') AS failed_uploads,`+
+		`(SELECT COUNT(*) FROM job_manager_task WHERE status = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS pending_tasks_count,`+
+		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS completed_scans,`+
+		`(SELECT COUNT(*) FROM job_manager_task WHERE status = -1 AND type = 'workflow_manager.tasks.upload.upload' AND created_at >= NOW() - INTERVAL '%d hours') AS failed_uploads,`+
 		`(SELECT COUNT(*) FROM (SELECT graph_id FROM job_manager_task GROUP BY graph_id HAVING MIN(created_at) >= NOW() - INTERVAL '%d hours') t) AS total_scans`,
-		d.windowHours, d.windowHours, d.windowHours, d.windowHours, d.windowHours, d.windowHours,
+		d.windowHours, d.windowHours, d.windowHours, d.windowHours,
 	)
 
 	args := []string{"exec"}
@@ -253,41 +232,31 @@ func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 
 	line := strings.TrimSpace(string(out))
 	parts := strings.Split(line, ",")
-	if len(parts) != 6 {
+	if len(parts) != 4 {
 		return nil, fmt.Errorf("unexpected psql output: %q", line)
 	}
 
-	scansComputed, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+	pendingTasksCount, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("parse scans_computed: %w", err)
+		return nil, fmt.Errorf("parse pending_tasks_count: %w", err)
 	}
-	scansDelivered, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+	completedScans, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("parse scans_delivered: %w", err)
+		return nil, fmt.Errorf("parse completed_scans: %w", err)
 	}
-	scansPending, err := strconv.ParseInt(strings.TrimSpace(parts[2]), 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("parse scans_pending: %w", err)
-	}
-	tasksPending, err := strconv.ParseInt(strings.TrimSpace(parts[3]), 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("parse tasks_pending: %w", err)
-	}
-	failedUploads, err := strconv.ParseInt(strings.TrimSpace(parts[4]), 10, 64)
+	failedUploads, err := strconv.ParseInt(strings.TrimSpace(parts[2]), 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse failed_uploads: %w", err)
 	}
-	totalScans, err := strconv.ParseInt(strings.TrimSpace(parts[5]), 10, 64)
+	totalScans, err := strconv.ParseInt(strings.TrimSpace(parts[3]), 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse total_scans: %w", err)
 	}
 
 	return &DCMIOMetrics{
-		ImagesProcessedCurrent:   scansComputed,
-		ImagesSyncedCurrent:      scansDelivered,
-		ImagesSyncPendingCurrent: scansPending,
-		TasksPendingCurrent:      tasksPending,
-		FailedUploadsCurrent:     failedUploads,
+		TasksPendingCurrent:      pendingTasksCount,
+		ImagesSyncedCurrent:      completedScans,
+		ImagesSyncPendingCurrent: failedUploads,
 		TotalScansCurrent:        totalScans,
 	}, nil
 }
