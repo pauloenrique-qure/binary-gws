@@ -108,6 +108,10 @@ type Collector struct {
 }
 
 func New(computeIntervalSeconds int) *Collector {
+	// Establish CPU baseline so the first collectCPU call returns a real delta
+	// instead of 0. gopsutil always returns 0 on the very first call because
+	// it has no prior sample to diff against.
+	cpu.Percent(0, false)
 	return &Collector{
 		computeInterval: time.Duration(computeIntervalSeconds) * time.Second,
 		maxRecentFails:  10, // Keep last 10 failures
@@ -171,7 +175,10 @@ func (c *Collector) GetComputeMetrics(force bool) *ComputeMetrics {
 }
 
 func (c *Collector) collectCPU() *CPUMetrics {
-	percentages, err := cpu.Percent(1*time.Second, false)
+	// interval=0 returns the delta since the last call (set up in New()).
+	// This measures CPU over the actual compute interval (~120s) rather than
+	// a fixed 1s window, giving a more representative average.
+	percentages, err := cpu.Percent(0, false)
 	if err != nil || len(percentages) == 0 {
 		return nil
 	}
