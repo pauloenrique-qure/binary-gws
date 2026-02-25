@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -13,6 +14,16 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// PendingTask represents a single pending task from job_manager_task.
+// Mirrors the fields returned by the original Python PENDING_QUERY.
+type PendingTask struct {
+	ID        int64  `json:"id"`
+	GraphID   string `json:"graph_id"`
+	Type      string `json:"type"`
+	Priority  int    `json:"priority"`
+	CreatedAt string `json:"created_at"`
+}
+
 // DCMIOMetrics holds business metrics fetched from DCMIO's PostgreSQL.
 // Fields are embedded in Stats and appear flat in the JSON payload.
 // Field names match what the Pulse dashboard expects:
@@ -21,11 +32,13 @@ import (
 //	images_synced_current       → "Scans Delivered last 12 hrs"
 //	images_sync_pending_current → "Failed Uploads"
 //	total_scans_current         → "Total Scans" (also denominator for Success Rate)
+//	pending_tasks               → list of pending task details
 type DCMIOMetrics struct {
-	TasksPendingCurrent      int64 `json:"tasks_pending_current"`
-	ImagesSyncedCurrent      int64 `json:"images_synced_current"`
-	ImagesSyncPendingCurrent int64 `json:"images_sync_pending_current"`
-	TotalScansCurrent        int64 `json:"total_scans_current"`
+	TasksPendingCurrent      int64         `json:"tasks_pending_current"`
+	ImagesSyncedCurrent      int64         `json:"images_synced_current"`
+	ImagesSyncPendingCurrent int64         `json:"images_sync_pending_current"`
+	TotalScansCurrent        int64         `json:"total_scans_current"`
+	PendingTasks             []PendingTask `json:"pending_tasks,omitempty"`
 }
 
 // DCMIOCollector queries DCMIO's postgres and caches results.
@@ -191,12 +204,38 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 		return nil, fmt.Errorf("scan dcmio metrics: %w", err)
 	}
 
-	return &DCMIOMetrics{
+	metrics := &DCMIOMetrics{
 		TasksPendingCurrent:      pendingTasksCount,
 		ImagesSyncedCurrent:      completedScans,
 		ImagesSyncPendingCurrent: failedUploads,
 		TotalScansCurrent:        totalScans,
-	}, nil
+	}
+
+	// Fetch pending task details (PENDING_QUERY from original Python script).
+	const pendingQuery = `
+		SELECT id, graph_id, type, priority, created_at
+		FROM job_manager_task
+		WHERE status = 0
+		  AND created_at >= NOW() - ($1 * INTERVAL '1 hour')
+		ORDER BY created_at DESC
+	`
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+
+	rows, err := d.db.QueryContext(ctx2, pendingQuery, d.windowHours)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var task PendingTask
+			var createdAt time.Time
+			if scanErr := rows.Scan(&task.ID, &task.GraphID, &task.Type, &task.Priority, &createdAt); scanErr == nil {
+				task.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+				metrics.PendingTasks = append(metrics.PendingTasks, task)
+			}
+		}
+	}
+
+	return metrics, nil
 }
 
 // fetchMetricsDockerExec runs the SQL via `docker exec <container> psql ...`.
@@ -253,10 +292,42 @@ func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 		return nil, fmt.Errorf("parse total_scans: %w", err)
 	}
 
-	return &DCMIOMetrics{
+	metrics := &DCMIOMetrics{
 		TasksPendingCurrent:      pendingTasksCount,
 		ImagesSyncedCurrent:      completedScans,
 		ImagesSyncPendingCurrent: failedUploads,
 		TotalScansCurrent:        totalScans,
-	}, nil
+	}
+
+	// Fetch pending task details via second docker exec (PENDING_QUERY).
+	pendingSQL := fmt.Sprintf(
+		`SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json) FROM `+
+			`(SELECT id, graph_id, type, priority, created_at FROM job_manager_task `+
+			`WHERE status = 0 AND created_at >= NOW() - INTERVAL '%d hours' `+
+			`ORDER BY created_at DESC) t`,
+		d.windowHours,
+	)
+
+	pendingArgs := []string{"exec"}
+	if d.postgresPass != "" {
+		pendingArgs = append(pendingArgs, "-e", "PGPASSWORD="+d.postgresPass)
+	}
+	pendingArgs = append(pendingArgs,
+		d.containerName,
+		"psql", "-U", d.postgresUser, "-d", d.postgresDB,
+		"-t", "-A",
+		"-c", pendingSQL,
+	)
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+
+	if pendingOut, pendingErr := exec.CommandContext(ctx2, "docker", pendingArgs...).Output(); pendingErr == nil {
+		var tasks []PendingTask
+		if jsonErr := json.Unmarshal([]byte(strings.TrimSpace(string(pendingOut))), &tasks); jsonErr == nil {
+			metrics.PendingTasks = tasks
+		}
+	}
+
+	return metrics, nil
 }
