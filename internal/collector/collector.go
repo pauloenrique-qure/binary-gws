@@ -393,7 +393,7 @@ func (c *Collector) collectProcess() *ProcessMetrics {
 			for _, monitoredName := range c.monitoredProcessNames {
 				if strings.Contains(searchStr, strings.ToLower(monitoredName)) {
 					info := ProcessInfo{
-						Name:   name,
+						Name:   monitoredName,
 						PID:    p.Pid,
 						Status: status[0],
 					}
