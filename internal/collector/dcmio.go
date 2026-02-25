@@ -152,8 +152,8 @@ func (d *DCMIOCollector) GetMetrics() *DCMIOMetrics {
 //
 //	pending_tasks_count — all pending tasks (status=0) created within the window.
 //
-//	completed_scans — distinct graph IDs where any task completed (status=2)
-//	within the window. Represents studies processed by the system.
+//	completed_scans — distinct graph IDs that started within the window
+//	(same population as total_scans) and have at least one completed task (status=2).
 //
 //	failed_uploads — failed upload tasks (status=-1,
 //	type='workflow_manager.tasks.upload.upload') within the window.
@@ -173,7 +173,12 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 				SELECT COUNT(DISTINCT graph_id)
 				FROM job_manager_task
 				WHERE status = 2
-				  AND updated_at >= NOW() - ($1 * INTERVAL '1 hour')
+				  AND graph_id IN (
+					SELECT graph_id
+					FROM job_manager_task
+					GROUP BY graph_id
+					HAVING MIN(created_at) >= NOW() - ($1 * INTERVAL '1 hour')
+				  )
 			) AS completed_scans,
 
 			(
@@ -244,7 +249,7 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 	sql := fmt.Sprintf(`SELECT `+
 		`(SELECT COUNT(*) FROM job_manager_task WHERE status = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS pending_tasks_count,`+
-		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS completed_scans,`+
+		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE status = 2 AND graph_id IN (SELECT graph_id FROM job_manager_task GROUP BY graph_id HAVING MIN(created_at) >= NOW() - INTERVAL '%d hours')) AS completed_scans,`+
 		`(SELECT COUNT(*) FROM job_manager_task WHERE status = -1 AND type = 'workflow_manager.tasks.upload.upload' AND created_at >= NOW() - INTERVAL '%d hours') AS failed_uploads,`+
 		`(SELECT COUNT(*) FROM (SELECT graph_id FROM job_manager_task GROUP BY graph_id HAVING MIN(created_at) >= NOW() - INTERVAL '%d hours') t) AS total_scans`,
 		d.windowHours, d.windowHours, d.windowHours, d.windowHours,
