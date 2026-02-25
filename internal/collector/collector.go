@@ -386,9 +386,12 @@ func (c *Collector) collectProcess() *ProcessMetrics {
 				continue
 			}
 
+			cmdline, _ := p.Cmdline()
+			searchStr := strings.ToLower(name + " " + cmdline)
+
 			// Check if this process name matches any monitored process
 			for _, monitoredName := range c.monitoredProcessNames {
-				if strings.Contains(strings.ToLower(name), strings.ToLower(monitoredName)) {
+				if strings.Contains(searchStr, strings.ToLower(monitoredName)) {
 					info := ProcessInfo{
 						Name:   name,
 						PID:    p.Pid,
