@@ -171,7 +171,7 @@ func (c *Collector) GetComputeMetrics(force bool) *ComputeMetrics {
 }
 
 func (c *Collector) collectCPU() *CPUMetrics {
-	percentages, err := cpu.Percent(100*time.Millisecond, false)
+	percentages, err := cpu.Percent(1*time.Second, false)
 	if err != nil || len(percentages) == 0 {
 		return nil
 	}
