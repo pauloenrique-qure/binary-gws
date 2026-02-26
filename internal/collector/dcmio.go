@@ -170,15 +170,13 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 			) AS pending_tasks_count,
 
 			(
-				SELECT COUNT(DISTINCT graph_id)
-				FROM job_manager_task
-				WHERE status = 2
-				  AND graph_id IN (
+				SELECT COUNT(*)
+				FROM (
 					SELECT graph_id
 					FROM job_manager_task
 					GROUP BY graph_id
 					HAVING MIN(created_at) >= NOW() - ($1 * INTERVAL '1 hour')
-				  )
+				) t
 			) AS completed_scans,
 
 			(
@@ -190,13 +188,10 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 			) AS failed_uploads,
 
 			(
-				SELECT COUNT(*)
-				FROM (
-					SELECT graph_id
-					FROM job_manager_task
-					GROUP BY graph_id
-					HAVING MIN(created_at) >= NOW() - ($1 * INTERVAL '1 hour')
-				) t
+				SELECT COUNT(DISTINCT graph_id)
+				FROM job_manager_task
+				WHERE status = 2
+				  AND updated_at >= NOW() - ($1 * INTERVAL '1 hour')
 			) AS total_scans
 	`
 
@@ -249,9 +244,9 @@ func (d *DCMIOCollector) fetchMetricsDirect() (*DCMIOMetrics, error) {
 func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 	sql := fmt.Sprintf(`SELECT `+
 		`(SELECT COUNT(*) FROM job_manager_task WHERE status = 0 AND created_at >= NOW() - INTERVAL '%d hours') AS pending_tasks_count,`+
-		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE status = 2 AND graph_id IN (SELECT graph_id FROM job_manager_task GROUP BY graph_id HAVING MIN(created_at) >= NOW() - INTERVAL '%d hours')) AS completed_scans,`+
+		`(SELECT COUNT(*) FROM (SELECT graph_id FROM job_manager_task GROUP BY graph_id HAVING MIN(created_at) >= NOW() - INTERVAL '%d hours') t) AS completed_scans,`+
 		`(SELECT COUNT(*) FROM job_manager_task WHERE status = -1 AND type = 'workflow_manager.tasks.upload.upload' AND created_at >= NOW() - INTERVAL '%d hours') AS failed_uploads,`+
-		`(SELECT COUNT(*) FROM (SELECT graph_id FROM job_manager_task GROUP BY graph_id HAVING MIN(created_at) >= NOW() - INTERVAL '%d hours') t) AS total_scans`,
+		`(SELECT COUNT(DISTINCT graph_id) FROM job_manager_task WHERE status = 2 AND updated_at >= NOW() - INTERVAL '%d hours') AS total_scans`,
 		d.windowHours, d.windowHours, d.windowHours, d.windowHours,
 	)
 
