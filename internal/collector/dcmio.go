@@ -302,7 +302,7 @@ func (d *DCMIOCollector) fetchMetricsDockerExec() (*DCMIOMetrics, error) {
 	// Fetch pending task details via second docker exec (PENDING_QUERY).
 	pendingSQL := fmt.Sprintf(
 		`SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json) FROM `+
-			`(SELECT id, graph_id, type, priority, created_at FROM job_manager_task `+
+			`(SELECT id, graph_id::text, type, priority, created_at FROM job_manager_task `+
 			`WHERE status = 0 AND created_at >= NOW() - INTERVAL '%d hours' `+
 			`ORDER BY created_at DESC) t`,
 		d.windowHours,
