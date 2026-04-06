@@ -103,6 +103,9 @@ type Collector struct {
 	// Process monitoring
 	monitoredProcessNames []string
 
+	// Disk path override
+	diskPath string
+
 	// DCMIO business metrics
 	dcmio *DCMIOCollector
 }
@@ -202,16 +205,24 @@ func (c *Collector) collectMemory() *MemoryMetrics {
 }
 
 func (c *Collector) collectDisk() *DiskMetrics {
+	c.mu.RLock()
+	overridePath := c.diskPath
+	c.mu.RUnlock()
+
 	var path string
-	partitions, err := disk.Partitions(false)
-	if err != nil || len(partitions) == 0 {
-		if runtime.GOOS == "windows" {
-			path = "C:"
-		} else {
-			path = "/"
-		}
+	if overridePath != "" {
+		path = overridePath
 	} else {
-		path = partitions[0].Mountpoint
+		partitions, err := disk.Partitions(false)
+		if err != nil || len(partitions) == 0 {
+			if runtime.GOOS == "windows" {
+				path = "C:"
+			} else {
+				path = "/"
+			}
+		} else {
+			path = partitions[0].Mountpoint
+		}
 	}
 
 	usage, err := disk.Usage(path)
@@ -341,6 +352,13 @@ func (c *Collector) GetDCMIOMetrics() *DCMIOMetrics {
 		return nil
 	}
 	return dc.GetMetrics()
+}
+
+// SetDiskPath overrides the auto-detected partition for disk metrics.
+func (c *Collector) SetDiskPath(path string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.diskPath = path
 }
 
 // SetMonitoredProcesses sets the list of process names to monitor

@@ -22,6 +22,7 @@ type Config struct {
 	TLS                 TLS         `yaml:"tls"`
 	MonitoredProcesses  []string    `yaml:"monitored_processes"`
 	DCMIO               DCMIOConfig `yaml:"dcmio"`
+	DiskPath            string      `yaml:"disk_path"`
 }
 
 type DCMIOConfig struct {

@@ -62,6 +62,13 @@ intervals:
 #   collector.RecordTaskSuccess("task-id")
 #   collector.RecordTaskFailure("task-id", "error message")
 
+# Disk path override (optional)
+# By default the agent picks the first partition returned by the OS, which may
+# be a small boot partition on multi-disk Ubuntu systems. Set this to the mount
+# point of the data disk you want to monitor.
+# Example: /media/root/storage
+# disk_path: "/media/root/storage"
+
 # Process monitoring (optional)
 # List of process names to monitor individually in each heartbeat.
 # Partial matches are supported (e.g. "python" matches "python3").

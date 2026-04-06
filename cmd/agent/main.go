@@ -58,6 +58,12 @@ func main() {
 
 	col := collector.New(cfg.Intervals.ComputeSeconds)
 	col.SetMonitoredProcesses(cfg.MonitoredProcesses)
+	if cfg.DiskPath != "" {
+		col.SetDiskPath(cfg.DiskPath)
+		logger.Info("Disk path override configured", map[string]interface{}{
+			"disk_path": cfg.DiskPath,
+		})
+	}
 
 	if cfg.DCMIO.ContainerName != "" {
 		dcmioCol := collector.NewDCMIODockerCollector(
