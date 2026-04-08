@@ -5,8 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/binary-gws/agent/internal/collector"
 	"github.com/binary-gws/agent/internal/config"
@@ -122,13 +120,8 @@ func main() {
 		BuildDate:        BuildDate,
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
 	if *once || *dryRun {
+		ctx := context.Background()
 		if err := sched.SendOnce(ctx, *dryRun); err != nil {
 			logger.Error("Failed to send heartbeat", map[string]interface{}{
 				"error": err.Error(),
@@ -139,13 +132,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	go func() {
-		<-sigChan
-		logger.Info("Received shutdown signal", nil)
-		cancel()
-	}()
-
-	if err := sched.Run(ctx); err != nil && err != context.Canceled {
+	if err := runService("GWAgent", sched.Run); err != nil && err != context.Canceled {
 		logger.Error("Scheduler error", map[string]interface{}{
 			"error": err.Error(),
 		})

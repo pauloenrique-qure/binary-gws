@@ -7,11 +7,12 @@ import (
 )
 
 const (
-	PlatformRaspberryPi = "raspberry_pi"
-	PlatformUbuntu      = "ubuntu"
-	PlatformWindows     = "windows_server"
-	PlatformVM          = "vm"
-	PlatformLinux       = "linux"
+	PlatformRaspberryPi   = "raspberry_pi"
+	PlatformUbuntu        = "ubuntu"
+	PlatformWindows       = "windows_server"
+	PlatformWindowsServer = "windows_server"
+	PlatformVM            = "vm"
+	PlatformLinux         = "linux"
 )
 
 type Info struct {
@@ -45,7 +46,11 @@ func Detect(override string) *Info {
 
 	switch info.OS {
 	case "windows":
-		info.Platform = PlatformWindows
+		if isWindowsServer() {
+			info.Platform = PlatformWindowsServer
+		} else {
+			info.Platform = PlatformWindows
+		}
 	case "linux":
 		if info.Arch == "arm64" && isRaspberryPi() {
 			info.Platform = PlatformRaspberryPi
